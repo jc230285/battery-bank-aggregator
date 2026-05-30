@@ -286,7 +286,7 @@ def _scrape_detail(page, asin):
     pd_w, max_w = parse.extract_watts(blob)
     usb_a, usb_c = parse.extract_ports(blob)
     feats = parse.detect_features(blob)
-    spec_blob = details + " " + title  # specs/title most reliable for chemistry & power-station fields
+    spec_blob = " ".join(filter(None, [details, bullets, title]))
 
     snippets = []
     try:

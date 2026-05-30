@@ -32,6 +32,22 @@ def test_physics_flags_impossible_pack():
     assert analysis.max_plausible_mah(5) is None
 
 
+def test_physics_flags_impossible_without_weight():
+    # 90000 mAh * 3.7 V = 333 Wh — more than a 1 kg Li-ion pack can hold (260 Wh).
+    # Should be flagged even with no weight data.
+    cap_90k = 90000 / 1000.0 * 3.7
+    score, flag = analysis.physics_subscore(cap_90k, None)
+    assert flag == "impossible_capacity"
+    assert 0 < score < 1
+    # 70000 mAh * 3.7 V = 259 Wh — just under the 260 Wh ceiling, no flag.
+    cap_70k = 70000 / 1000.0 * 3.7
+    score2, flag2 = analysis.physics_subscore(cap_70k, None)
+    assert flag2 is None
+    # Legitimate 20000 mAh must still pass.
+    cap_20k = 20000 / 1000.0 * 3.7
+    assert analysis.physics_subscore(cap_20k, None) == (None, None)
+
+
 def test_physics_is_chemistry_aware():
     # 100 Wh @ 500 g: fine as Li-ion (floor ~385 g) but impossible as LiFePO4 (~625 g).
     assert analysis.physics_subscore(100, 500, "li-ion")[1] is None
