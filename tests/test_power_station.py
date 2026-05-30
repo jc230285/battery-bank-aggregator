@@ -32,6 +32,10 @@ def test_extract_chemistry():
     assert parse.extract_chemistry("NMC ternary lithium pack") == "nmc"
     assert parse.extract_chemistry("Lithium-ion portable charger") == "li-ion"
     assert parse.extract_chemistry("no chemistry mentioned") is None
+    # Alternate spellings
+    assert parse.extract_chemistry("lithium ferro phosphate battery") == "lifepo4"
+    assert parse.extract_chemistry("NCA cells, 3.6V") == "nmc"
+    assert parse.extract_chemistry("nickel cobalt aluminium cathode") == "nmc"
 
 
 def test_extract_wh():
