@@ -130,6 +130,9 @@ def test_extract_ports_bare_usb_and_words():
     # a pure USB-C product should not invent a USB-A port
     a, c = parse.extract_ports("Single USB-C port only")
     assert a is None and c == 1
+    # trailing (x2) quantity marker after port spec
+    a, c = parse.extract_ports("USB-C PD 65W (x2), USB-A 22.5W (x2)")
+    assert a == 2 and c == 2
 
 
 def test_detect_features():

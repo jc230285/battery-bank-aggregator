@@ -239,14 +239,23 @@ def extract_ports(text):
     usb_c = 0
     usb_a = 0
 
-    for m in re.finditer(r"(\d+)\s*[x×]?\s*(?:usb[\s\-]?c|type[\s\-]?c)", t):
+    _C_PAT = r"(?:usb[\s\-]?c|type[\s\-]?c)"
+    _A_PAT = r"(?:usb[\s\-]?a|type[\s\-]?a)"
+    _QTY   = r"\([x×](\d+)\)"  # trailing (x2) / (×2) quantity marker
+
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*" + _C_PAT, t):
         usb_c = max(usb_c, int(m.group(1)))
-    for m in re.finditer(r"(?:usb[\s\-]?c|type[\s\-]?c)\s*[x×]\s*(\d+)", t):
+    for m in re.finditer(_C_PAT + r"\s*[x×]\s*(\d+)", t):
+        usb_c = max(usb_c, int(m.group(1)))
+    # "USB-C PD 65W (x2)" — quantity in trailing parens after port spec
+    for m in re.finditer(_C_PAT + r"[^,;(]{0,20}" + _QTY, t):
         usb_c = max(usb_c, int(m.group(1)))
 
-    for m in re.finditer(r"(\d+)\s*[x×]?\s*(?:usb[\s\-]?a|type[\s\-]?a)", t):
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*" + _A_PAT, t):
         usb_a = max(usb_a, int(m.group(1)))
-    for m in re.finditer(r"(?:usb[\s\-]?a|type[\s\-]?a)\s*[x×]\s*(\d+)", t):
+    for m in re.finditer(_A_PAT + r"\s*[x×]\s*(\d+)", t):
+        usb_a = max(usb_a, int(m.group(1)))
+    for m in re.finditer(_A_PAT + r"[^,;(]{0,20}" + _QTY, t):
         usb_a = max(usb_a, int(m.group(1)))
     # bare "USB" = USB-A, excluding USB-C and micro/mini-USB (usually input)
     tb = re.sub(r"(?:micro|mini)[\s\-]?usb", " ", t)
