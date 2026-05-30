@@ -8,7 +8,7 @@ import config
 import parse
 import datetime
 
-from models import Product, PriceHistory, Meta
+from models import Product, PriceHistory, ScrapeRun, Meta
 
 log = logging.getLogger("analysis")
 
@@ -349,7 +349,7 @@ def fair_price(model, p, category):
     v = model["intercept"]
     for name, val in zip(feature_names(category), _feature_vector(p, category)):
         v += c[name] * val
-    return float(v)
+    return max(0.01, float(v))  # NNLS guarantees non-negative coefs but not intercept
 
 
 def feature_contributions(model, p, category):
@@ -502,6 +502,9 @@ def run_analysis(session):
     # and prevents unbounded growth (~700 rows/product/year at hourly refresh).
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=config.PRICE_HISTORY_KEEP_DAYS)
     session.query(PriceHistory).filter(PriceHistory.captured_at < cutoff).delete(synchronize_session=False)
+    # Keep only the last 90 days of scrape run logs — enough for diagnostics.
+    run_cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=90)
+    session.query(ScrapeRun).filter(ScrapeRun.started_at < run_cutoff).delete(synchronize_session=False)
 
     session.commit()
     return models
