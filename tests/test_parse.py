@@ -217,6 +217,9 @@ def test_extract_date_first_available():
         "Date First Available: 2023-05-12") == "2023-05-12"
     assert parse.extract_date_first_available("no such field here") is None
     assert parse.extract_date_first_available("") is None
+    # UK slash format DD/MM/YYYY
+    assert parse.extract_date_first_available(
+        "Date First Available: 15/03/2024") == "2024-03-15"
 
 
 def test_clean_brand():

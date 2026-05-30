@@ -496,6 +496,12 @@ def extract_date_first_available(text):
     m = re.search(r"(\d{4})-(\d{2})-(\d{2})", window)  # 2023-05-12 ISO
     if m:
         return m.group(0)
+    # DD/MM/YYYY (UK slash format) — assume day-first for Amazon UK locale.
+    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", window)
+    if m:
+        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= d <= 31 and 1 <= mo <= 12:
+            return f"{y:04d}-{mo:02d}-{d:02d}"
     return None
 
 
