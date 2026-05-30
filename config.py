@@ -130,6 +130,10 @@ FAKE_PHRASES = [
     "feels too light", "feels light for", "won't even charge",
     "doesn't even charge", "lies about", "scam", "misleading capacity",
     "advertised mah", "no way it's", "no way its",
+    "half the capacity", "half the mah", "not 20000", "not 30000",
+    "rubbish capacity", "terrible capacity", "useless capacity",
+    "not what it claims", "completely false", "utter rubbish",
+    "wouldn't even charge", "couldn't even charge",
 ]
 
 # LiFePO4 cells sit at ~3.2 V nominal vs Li-ion ~3.7 V; this matters for the
