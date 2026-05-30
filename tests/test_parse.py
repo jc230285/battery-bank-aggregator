@@ -178,6 +178,8 @@ def test_parse_review_count_formats():
     assert parse.parse_review_count("12.3k") == 12300
     assert parse.parse_review_count("4.5 out of 5 stars") is None  # rating, not count
     assert parse.parse_review_count("") is None
+    assert parse.parse_review_count("1000+ ratings") == 1000   # '+' suffix
+    assert parse.parse_review_count("5K+ reviews") == 5000     # K + '+'
 
 
 def test_is_accessory():

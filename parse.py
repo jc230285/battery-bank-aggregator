@@ -562,9 +562,9 @@ def parse_review_count(text):
     if not text:
         return None
     t = text.lower().replace(",", "")
-    m = re.search(r"(\d+(?:\.\d+)?)\s*([km])?\s*(?:global\s+)?(?:ratings?|reviews?)", t)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*([km])?\s*\+?\s*(?:global\s+)?(?:ratings?|reviews?)", t)
     if not m:
-        m = re.search(r"^\(?\s*(\d+(?:\.\d+)?)\s*([km])?\s*\)?\s*$", t.strip())
+        m = re.search(r"^\(?\s*(\d+(?:\.\d+)?)\s*([km])?\s*\+?\s*\)?\s*$", t.strip())
     if not m:
         return None
     val = float(m.group(1))
