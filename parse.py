@@ -251,13 +251,14 @@ def extract_chemistry(text):
         return None
     t = text.lower()
     if any(k in t for k in ("lifepo4", "lifepo", "lfp", "lithium iron phosphate",
-                            "iron phosphate")):
+                            "lithium-iron-phosphate", "iron phosphate", "li-fe")):
         return "lifepo4"
     if "lithium titanate" in t or re.search(r"\blto\b", t):
         return "lto"
     if any(k in t for k in ("nmc", "ncm", "ternary lithium")):
         return "nmc"
-    if any(k in t for k in ("lithium polymer", "li-polymer", "li-po", "lipo", "polymer battery", "polymer cell")):
+    if any(k in t for k in ("lithium polymer", "li-polymer", "li-po", "li po",
+                            "li polymer", "lipo", "polymer battery", "polymer cell")):
         return "li-po"
     if any(k in t for k in ("lithium-ion", "lithium ion", "li-ion", "liion",
                             "lithium battery", "lithium batteries")):

@@ -18,7 +18,11 @@ def test_is_power_station():
 def test_extract_chemistry():
     assert parse.extract_chemistry("LiFePO4 1024Wh power station") == "lifepo4"
     assert parse.extract_chemistry("Lithium Iron Phosphate battery") == "lifepo4"
+    assert parse.extract_chemistry("lithium-iron-phosphate cell") == "lifepo4"
+    assert parse.extract_chemistry("li-fe 3.2V pack") == "lifepo4"
     assert parse.extract_chemistry("20000mAh Li-polymer power bank") == "li-po"
+    assert parse.extract_chemistry("3.7V li po cell") == "li-po"
+    assert parse.extract_chemistry("li polymer battery") == "li-po"
     assert parse.extract_chemistry("NMC ternary lithium pack") == "nmc"
     assert parse.extract_chemistry("Lithium-ion portable charger") == "li-ion"
     assert parse.extract_chemistry("no chemistry mentioned") is None
