@@ -6,7 +6,9 @@ import numpy as np
 
 import config
 import parse
-from models import Product, Meta
+import datetime
+
+from models import Product, PriceHistory, Meta
 
 log = logging.getLogger("analysis")
 
@@ -496,10 +498,8 @@ def run_analysis(session):
 
     # Prune old price history once per analysis pass. A single DELETE is cheap
     # and prevents unbounded growth (~700 rows/product/year at hourly refresh).
-    import datetime as _dt
-    cutoff = _dt.datetime.utcnow() - _dt.timedelta(days=config.PRICE_HISTORY_KEEP_DAYS)
-    from models import PriceHistory as _PH
-    session.query(_PH).filter(_PH.captured_at < cutoff).delete(synchronize_session=False)
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=config.PRICE_HISTORY_KEEP_DAYS)
+    session.query(PriceHistory).filter(PriceHistory.captured_at < cutoff).delete(synchronize_session=False)
 
     session.commit()
     return models

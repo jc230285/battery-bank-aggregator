@@ -583,12 +583,24 @@ def refresh_asins_http(asins, on_item=None, on_progress=None, on_delisted=None):
                         on_delisted(asin)
                     except Exception as ex:  # noqa: BLE001
                         log.warning("on_delisted failed for %s: %s", asin, ex)
-            else:
-                notes += f"{asin} HTTP {e.code}; "
-            continue
+                continue
+            # 5xx / 429: one retry after a short back-off — these are usually
+            # transient and a single extra attempt recovers most of them.
+            log.debug("transient HTTP %d for %s — retrying", e.code, asin)
+            time.sleep(random.uniform(4, 8))
+            try:
+                html = _http_get(url)
+            except Exception as retry_e:  # noqa: BLE001
+                notes += f"{asin} HTTP {e.code} (retry: {retry_e}); "
+                continue
         except (URLError, TimeoutError) as e:
-            notes += f"{asin} fetch failed; "
-            continue
+            log.debug("transient fetch error for %s (%s) — retrying", asin, e)
+            time.sleep(random.uniform(4, 8))
+            try:
+                html = _http_get(url)
+            except Exception as retry_e:  # noqa: BLE001
+                notes += f"{asin} fetch failed ({retry_e}); "
+                continue
         try:
             detail = _parse_detail_html(html, asin)
         except BlockedError:
