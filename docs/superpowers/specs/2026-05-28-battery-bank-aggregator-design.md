@@ -1,7 +1,8 @@
 # Battery Bank Aggregator — Design
 
 **Date:** 2026-05-28
-**Status:** Approved design, pending implementation plan
+**Status:** Implemented (2026-05-29). See "As-built notes" at the end for how the
+implementation evolved beyond this original design.
 
 ## Purpose
 
@@ -177,3 +178,55 @@ defined server-side and sent to the client.
 ## Open caveats (accepted)
 1. Amazon scraping can hit CAPTCHAs; the app degrades to partial runs by design.
 2. The hedonic regression on ~50 products is directional (outlier-spotting), not precise.
+
+---
+
+## As-built notes (2026-05-29)
+
+The implementation diverged from / extended the original design as follows. This section
+is the source of truth for current behaviour.
+
+**Scrape scope — now unlimited, not top-50.** `TOP_N=0` (unlimited): the scraper
+paginates the search (up to `MAX_PAGES=30`) collecting every relevant card, then scrapes
+until a CAPTCHA stops it. Result is typically ~300 products, not 50. The regression
+therefore runs on a much larger, more useful sample than the "~50, indicative" caveat.
+
+**Incremental scraping (sustainability).** Specs are static per ASIN, so a normal run
+detail-scrapes only *new* products and **price-refreshes known ones from the search card**
+(no detail-page hit). New products are scraped first so the catalog visibly grows. A
+**"Full refresh"** button (`/api/run?full=1`) forces a full detail re-scrape (e.g. to apply
+parser updates). This cut a full run from ~330 requests to ~75 and avoids routine CAPTCHAs.
+
+**Relevance filtering.** `parse.is_battery_bank` keeps power banks and drops accessories
+(cases/cables/covers) at card and detail stages; `parse.is_accessory` (strong signals only)
+is used for safe deletion of stored rows.
+
+**Honesty score additions.** Beyond the 4 weighted signals: physics now also yields a
+**capacity ceiling** (`max_plausible_mah`) and an **overstatement %** for impossible claims
+(e.g. "40000mAh @ 313g → max ~22000, +82%"), shown in the badge tooltip. A **confidence
+cue** (`n/4`) shows how many signals were available. Implausible stored weights
+(<40g / >6kg) are ignored via `_clean_weight`.
+
+**Feature value — NNLS, not plain OLS.** The hedonic model uses non-negative least squares
+(`scipy.optimize.nnls`, clipped-OLS fallback flagged in the model) so feature values are
+always ≥0. Feature importance defaults to **0** (opt-in): value-to-you is £0 until the user
+raises a slider. Default table sort is **rating** (desc).
+
+**Reconciliation — grace-period.** Delisted products are removed only after they've been
+absent **`REMOVE_AFTER_HOURS=30`** (not on a single miss, since results shift run-to-run),
+and only on a healthy run (≥20 items). Definitive accessories are removed immediately.
+
+**Robustness / correctness (post-review).** SQLite engine uses
+`check_same_thread=False` + WAL + busy_timeout for the background-scrape / Flask-read
+overlap; client-side rendering HTML-escapes scraped strings and allows only `https` URLs
+(XSS); `run_cycle` guarantees lock release + failure logging; orphaned "running" runs are
+marked `interrupted` on startup; a parse-yield guard downgrades a run to `partial` if
+<50% of items have a price (catches silently-broken selectors); interim analysis is
+time-throttled.
+
+**Extras:** client-side **CSV export** of the current filtered/sorted view; live scrape
+**progress** + limit stats (`[pages=N scraped=M dur=Ns]`) in the run record and status bar.
+
+**Tests:** 28 tests across `tests/test_{parse,analysis,scraper,pipeline,app}.py` (pure
+parsers, analysis pipeline on in-memory DB, scraper helpers, serialization). Run with the
+inline runner in CI-less form; note a global `pytest-socket` plugin blocks plain `pytest`.

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Battery Bank Aggregator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background:#0b1220; color:#e5e7eb; }
+    th.sortable { cursor:pointer; user-select:none; }
+    th.sortable:hover { color:#93c5fd; }
+    .badge { font-size:11px; padding:1px 6px; border-radius:9999px; white-space:nowrap; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <script>window.BBA_DATA = {{ data|tojson }};</script>
+
+  <header class="border-b border-slate-700 px-5 py-3 flex items-center gap-4 flex-wrap">
+    <h1 class="text-lg font-semibold text-sky-300">Battery Aggregator</h1>
+    <div id="cat-toggle" class="flex gap-1"></div>
+  </header>
+
+  <div class="flex flex-col lg:flex-row">
+    <aside class="lg:w-80 shrink-0 border-r border-slate-800 p-4 space-y-5 text-sm">
+      <section>
+        <button id="runBtn" class="block w-full bg-sky-600 hover:bg-sky-500 text-white text-sm px-3 py-1.5 rounded">
+          Run scrape now
+        </button>
+        <div id="status" class="text-xs text-slate-400 mt-2"></div>
+      </section>
+      <section>
+        <h2 class="font-semibold text-slate-200 mb-2">Filters</h2>
+        <div id="filter-fields" class="space-y-2"></div>
+      </section>
+
+      <section>
+        <h2 class="font-semibold text-slate-200 mb-2">Honesty signal weights</h2>
+        <div id="honesty-weights" class="space-y-2"></div>
+      </section>
+
+      <section>
+        <h2 class="font-semibold text-slate-200 mb-1">Features I want</h2>
+        <p class="text-xs text-slate-500 mb-2">Importance drives "value to you" (0 = don't care).</p>
+        <div id="feature-weights" class="space-y-2"></div>
+      </section>
+    </aside>
+
+    <main class="flex-1 p-4 overflow-x-auto">
+      <div id="model-note" class="text-xs text-slate-500 mb-2"></div>
+      <div id="summary-bar" class="text-xs text-slate-400 mb-3 flex flex-wrap items-center gap-x-4 gap-y-1"></div>
+      <table class="w-full text-sm border-collapse">
+        <thead class="text-slate-300 border-b border-slate-700">
+          <tr id="head-row"></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p id="empty" class="text-slate-500 mt-6 hidden">No products yet — run a scrape.</p>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

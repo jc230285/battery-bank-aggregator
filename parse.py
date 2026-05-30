@@ -1,0 +1,425 @@
+"""Pure parsing helpers (no Playwright) so they can be unit-tested in isolation."""
+import re
+
+WIRELESS_KEYS = ["wireless charg", "qi charg", "qi-certified", "qi certified",
+                 "magsafe", "induction charg", "wireless power"]
+DISPLAY_KEYS = ["lcd", "digital display", "display screen", "led display",
+                "smart display", "percentage display", "screen display"]
+PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough"]
+SOLAR_KEYS = ["solar"]
+
+
+def asin_from_url(url):
+    m = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", url or "")
+    return m.group(1) if m else None
+
+
+# Relevance: keep actual power banks, drop accessories (cases, cables, covers...).
+POSITIVE_KEYS = [
+    "power bank", "powerbank", "battery bank", "portable charger",
+    "power pack", "charging bank", "portable power bank",
+]
+# Definitive accessory signals: the product itself IS a case/protector, or is
+# explicitly "for" another device. These win even if "power bank" appears
+# (e.g. "Hard Travel Case for Anker Power Bank"). Kept deliberately narrow so
+# real power banks that merely bundle a cable/adapter are NOT excluded.
+STRONG_EXCLUDE = [
+    "case for", "case only", "case replacement", "replacement for",
+    "carrying case", "travel case", "cover for", "sleeve for", "pouch for",
+    "bag for", "screen protector", "tempered glass",
+]
+# Weaker signals: only disqualify when NO positive power-bank phrase is present
+# (so a standalone cable/charger/holder is dropped, but a power bank that
+# mentions an included cable is kept).
+WEAK_EXCLUDE = [
+    " cable", "adapter", "adaptor", "wall charger", "mains charger",
+    "stand for", "holder", "lanyard", "earbud", "headphone", "power strip",
+    "extension lead", "aa batter", "aaa batter", "car battery", "9v battery",
+    "button cell", " case", "cover", " dock", "mount for",
+]
+
+
+def is_accessory(title):
+    """True only for *definitive* accessories (case/cover/protector "for" a
+    device). Used for safe deletion of stored rows — never deletes a borderline
+    item, unlike the weak-exclude path in is_battery_bank."""
+    t = (title or "").lower()
+    return bool(t) and any(k in t for k in STRONG_EXCLUDE)
+
+
+def is_battery_bank(title, mah=None):
+    """True if the listing looks like a power bank rather than an accessory."""
+    t = (title or "").lower()
+    if not t:
+        return mah is not None  # no title: trust a parsed capacity
+    if any(k in t for k in STRONG_EXCLUDE):
+        return False
+    if any(k in t for k in POSITIVE_KEYS):
+        return True
+    if any(k in t for k in WEAK_EXCLUDE):
+        return False
+    return mah is not None
+
+
+def extract_mah(text):
+    """Largest plausible mAh figure in the text, else None."""
+    if not text:
+        return None
+    t = text.lower().replace(",", "")
+    vals = [int(x) for x in re.findall(r"(\d{3,7})\s*m\s*a\s*h", t)]
+    vals = [v for v in vals if 500 <= v <= 500000]
+    return max(vals) if vals else None
+
+
+# Weight units, longest-first so the regex alternation prefers full words.
+_WEIGHT_UNIT = r"(kilograms?|kg|grams?|gr|g|ounces?|oz|pounds?|lbs?|lb)"
+# Amazon sprinkles invisible directionality / zero-width marks into spec tables.
+_INVISIBLE = "‎‏​‪‫‬﻿"
+
+
+def _to_grams(value, unit):
+    u = unit.lower()
+    if u.startswith("kg") or u.startswith("kilogram"):
+        return value * 1000.0
+    if u.startswith("lb") or u.startswith("pound"):
+        return value * 453.592
+    if u.startswith("oz") or u.startswith("ounce"):
+        return value * 28.3495
+    return value  # grams
+
+
+# Plausible weight range for a power bank in grams. Rejects misparses such as
+# "5G"/"5V 5A" read as "5 grams" (no real power bank is under ~40 g, and even
+# huge ones stay well under 6 kg once power stations are filtered out).
+WEIGHT_MIN_G = 40.0
+WEIGHT_MAX_G = 6000.0
+
+
+def extract_weight_g(text):
+    """Weight in grams from Amazon weight strings, else None.
+
+    Collects candidates in priority order — value next to a 'weight' label, then
+    after a dimension separator ("...cm; 240 g"), then any weight token (heavier
+    units first) — and returns the first one within a plausible range.
+    """
+    if not text:
+        return None
+    t = text
+    for ch in _INVISIBLE:
+        t = t.replace(ch, " ")
+    t = t.lower().replace(",", "")
+
+    candidates = []
+    m = re.search(r"weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+    if m:
+        candidates.append(_to_grams(float(m.group(1)), m.group(2)))
+    m = re.search(r"[;:]\s*(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+    if m:
+        candidates.append(_to_grams(float(m.group(1)), m.group(2)))
+    for unit_re, factor in (
+        (r"(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)\b", 1000.0),
+        (r"(\d+(?:\.\d+)?)\s*(?:lbs?|lb|pounds?)\b", 453.592),
+        (r"(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b", 28.3495),
+        (r"(\d+(?:\.\d+)?)\s*(?:grams?|gr|g)\b", 1.0),
+    ):
+        m = re.search(unit_re, t)
+        if m:
+            candidates.append(float(m.group(1)) * factor)
+
+    for c in candidates:
+        if WEIGHT_MIN_G <= c <= WEIGHT_MAX_G:
+            return c
+    return None
+
+
+def extract_watts(text):
+    """Return (pd_w, max_w). PD wattage if near 'PD'/'Power Delivery', plus the
+    overall max output wattage. Wattage is also inferred from voltage/current
+    pairs ("9V/2A" -> 18 W), ignoring AC mains input (V > 30)."""
+    if not text:
+        return (None, None)
+    t = text.lower()
+    nums = []
+    # Explicit wattage tokens, decimals included ("22.5W", "65 W").
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*w(?:att)?s?\b", t):
+        v = float(m.group(1))
+        if 1 <= v <= 300:
+            nums.append(v)
+    # Voltage/current pairs -> watts ("5v/3a", "9v 2a"); USB output only.
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*v\s*[/⎓·,]?\s*(\d+(?:\.\d+)?)\s*a\b", t):
+        volt, amp = float(m.group(1)), float(m.group(2))
+        if 0 < volt <= 30 and 0 < amp <= 10:
+            w = volt * amp
+            if 1 <= w <= 300:
+                nums.append(w)
+    max_w = max(nums) if nums else None
+
+    pd_w = None
+    # Wattage directly before "PD": e.g. "20W PD".
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*w\s*(?:pd|power delivery)", t):
+        v = float(m.group(1))
+        if 1 <= v <= 300:
+            pd_w = max(pd_w or 0, v)
+    # Wattage directly after "PD": e.g. "PD 20W", "Power Delivery: 65W".
+    for m in re.finditer(
+            r"(?:pd|power delivery)\s*(?:charging|output|input)?\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*w", t):
+        v = float(m.group(1))
+        if 1 <= v <= 300:
+            pd_w = max(pd_w or 0, v)
+    return (pd_w, max_w)
+
+
+def extract_ports(text):
+    """Return (usb_a, usb_c) counts (best-effort), else None for each.
+
+    USB-C is matched explicitly. USB-A also counts a bare "USB" (the classic
+    port), but not USB-C and not micro/mini-USB input. Word counts like "dual"
+    are normalised to digits first.
+    """
+    if not text:
+        return (None, None)
+    t = text.lower()
+    t = re.sub(r"\bdual\b", "2", t)
+    t = re.sub(r"\btriple\b", "3", t)
+    t = re.sub(r"\bquad(?:ruple)?\b", "4", t)
+    usb_c = 0
+    usb_a = 0
+
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*(?:usb[\s\-]?c|type[\s\-]?c)", t):
+        usb_c = max(usb_c, int(m.group(1)))
+    for m in re.finditer(r"(?:usb[\s\-]?c|type[\s\-]?c)\s*[x×]\s*(\d+)", t):
+        usb_c = max(usb_c, int(m.group(1)))
+
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*(?:usb[\s\-]?a|type[\s\-]?a)", t):
+        usb_a = max(usb_a, int(m.group(1)))
+    for m in re.finditer(r"(?:usb[\s\-]?a|type[\s\-]?a)\s*[x×]\s*(\d+)", t):
+        usb_a = max(usb_a, int(m.group(1)))
+    # bare "USB" = USB-A, excluding USB-C and micro/mini-USB (usually input)
+    tb = re.sub(r"(?:micro|mini)[\s\-]?usb", " ", t)
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*usb(?![\s\-]?c)\b", tb):
+        usb_a = max(usb_a, int(m.group(1)))
+
+    if usb_c == 0 and re.search(r"usb[\s\-]?c|type[\s\-]?c", t):
+        usb_c = 1
+    if usb_a == 0 and re.search(r"usb(?![\s\-]?c)\b", tb):
+        usb_a = 1
+    return (usb_a or None, usb_c or None)
+
+
+def _has_any(text, keys):
+    if not text:
+        return False
+    t = text.lower()
+    return any(k in t for k in keys)
+
+
+EXPANDABLE_KEYS = ["expandable", "expansion battery", "extra battery", "modular capacity",
+                   "expand capacity", "add-on battery"]
+
+
+def detect_features(text):
+    t = (text or "").lower()
+    return {
+        "wireless": _has_any(text, WIRELESS_KEYS),
+        "display": _has_any(text, DISPLAY_KEYS),
+        "passthrough": _has_any(text, PASSTHROUGH_KEYS),
+        "solar": _has_any(text, SOLAR_KEYS),
+        "expandable": any(k in t for k in EXPANDABLE_KEYS),
+        "ups": "uninterruptible" in t or bool(re.search(r"\bups\b", t)),
+    }
+
+
+# ---- power-station parsers ----
+POWER_STATION_KEYS = ["power station", "portable power station", "solar generator",
+                      "portable generator", "lifepo4 generator", "leisure battery"]
+
+
+def is_power_station(title):
+    """True if the listing is a portable power station (not an accessory)."""
+    t = (title or "").lower()
+    if not t or any(k in t for k in STRONG_EXCLUDE):
+        return False
+    return any(k in t for k in POWER_STATION_KEYS)
+
+
+def extract_chemistry(text):
+    """Battery chemistry: lifepo4 | li-po | nmc | lto | li-ion, else None."""
+    if not text:
+        return None
+    t = text.lower()
+    if any(k in t for k in ("lifepo4", "lifepo", "lfp", "lithium iron phosphate",
+                            "iron phosphate")):
+        return "lifepo4"
+    if "lithium titanate" in t or re.search(r"\blto\b", t):
+        return "lto"
+    if "nmc" in t or "ternary lithium" in t:
+        return "nmc"
+    if any(k in t for k in ("lithium polymer", "li-polymer", "li-po", "lipo", "polymer")):
+        return "li-po"
+    if any(k in t for k in ("lithium-ion", "lithium ion", "li-ion", "liion", "lithium battery")):
+        return "li-ion"
+    return None
+
+
+def extract_wh(text):
+    """Energy capacity in Wh (handles kWh), else None. Returns the largest plausible."""
+    if not text:
+        return None
+    t = text.lower().replace(",", "")
+    vals = [float(m.group(1)) * 1000 for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t)]
+    vals += [float(m.group(1)) for m in re.finditer(r"(\d+(?:\.\d+)?)\s*wh\b", t)]
+    vals = [v for v in vals if 50 <= v <= 20000]
+    return max(vals) if vals else None
+
+
+def extract_ac_output_w(text):
+    """Continuous AC inverter wattage (ignores surge/peak), else None."""
+    if not text:
+        return None
+    t = text.lower()
+    surge = set()  # wattages explicitly labelled surge/peak — excluded
+    for m in re.finditer(r"(\d{3,4})\s*w\s*(?:surge|peak)", t):
+        surge.add(int(m.group(1)))
+    # surge directly followed by the number (no comma) — "surge 2000W", "peak: 2000W"
+    for m in re.finditer(r"(?:surge|peak)\s*:?\s*(\d{3,4})\s*w", t):
+        surge.add(int(m.group(1)))
+    best = None
+    for m in re.finditer(r"(\d{3,4})\s*w\b", t):
+        v = int(m.group(1))
+        if not (100 <= v <= 8000) or v in surge:
+            continue
+        window = t[max(0, m.start() - 25):m.end() + 12]
+        if any(k in window for k in ("ac", "output", "inverter", "sine", "rated",
+                                     "continuous", "mains", "socket", "plug")):
+            best = max(best or 0, v)
+    return best
+
+
+def extract_ac_sockets(text):
+    """Number of AC outlets/sockets, else None."""
+    if not text:
+        return None
+    t = text.lower()
+    cnt = 0
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*(?:ac (?:output|socket|outlet|port)|uk socket|mains socket)", t):
+        cnt = max(cnt, int(m.group(1)))
+    for m in re.finditer(r"ac (?:output|socket|outlet)s?\s*[x×]\s*(\d+)", t):
+        cnt = max(cnt, int(m.group(1)))
+    if cnt == 0 and re.search(r"ac (?:output|socket|outlet)|mains socket", t):
+        cnt = 1
+    return cnt or None
+
+
+def extract_solar_input_w(text):
+    """Max solar input wattage if solar/MPPT is mentioned, else None."""
+    if not text:
+        return None
+    t = text.lower()
+    if "solar" not in t and "mppt" not in t:
+        return None
+    best = None
+    for m in re.finditer(r"(\d{2,4})\s*w\b", t):
+        v = int(m.group(1))
+        window = t[max(0, m.start() - 20):m.end() + 12]
+        if "solar" in window and 10 <= v <= 2000:
+            best = max(best or 0, v)
+    return best
+
+
+def extract_cycle_life(text):
+    """Rated charge cycles (e.g. '3000 cycles'), else None."""
+    if not text:
+        return None
+    t = text.lower().replace(",", "")
+    m = re.search(r"(\d{3,5})\s*\+?\s*(?:charge\s*)?cycles?", t)
+    if m:
+        v = int(m.group(1))
+        if 100 <= v <= 20000:
+            return v
+    return None
+
+
+def parse_price(text):
+    if not text:
+        return None
+    m = re.search(r"£\s*([\d,]+(?:\.\d{1,2})?)", text)
+    if m:
+        return float(m.group(1).replace(",", ""))
+    m = re.search(r"([\d,]+\.\d{2})", text)
+    if m:
+        return float(m.group(1).replace(",", ""))
+    return None
+
+
+_MONTHS = {m.lower(): i for i, m in enumerate(
+    ["January", "February", "March", "April", "May", "June", "July", "August",
+     "September", "October", "November", "December"], 1)}
+
+
+def extract_date_first_available(text):
+    """ISO date (YYYY-MM-DD) from the 'Date First Available' / 'Date First Listed'
+    row of an Amazon product-details table, else None."""
+    if not text:
+        return None
+    t = text
+    for ch in _INVISIBLE:
+        t = t.replace(ch, " ")
+    low = t.lower()
+    idx = low.find("date first available")
+    if idx < 0:
+        idx = low.find("date first listed")
+    if idx < 0:
+        return None
+    window = t[idx:idx + 60]
+    m = re.search(r"(\d{1,2})\s+([A-Za-z]+)\.?\s+(\d{4})", window)   # 12 May 2023
+    if m and m.group(2).lower() in _MONTHS:
+        return f"{int(m.group(3)):04d}-{_MONTHS[m.group(2).lower()]:02d}-{int(m.group(1)):02d}"
+    m = re.search(r"([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})", window)  # May 12, 2023
+    if m and m.group(1).lower() in _MONTHS:
+        return f"{int(m.group(3)):04d}-{_MONTHS[m.group(1).lower()]:02d}-{int(m.group(2)):02d}"
+    return None
+
+
+def clean_brand(text):
+    """Normalise an Amazon byline into a bare brand name.
+
+    Handles "Visit the X Store", "Brand: X", "by X", and a trailing "Store".
+    """
+    if not text:
+        return None
+    b = text.strip()
+    m = re.search(r"visit the\s+(.+?)\s+store\b", b, re.I)
+    if m:
+        b = m.group(1)
+    b = re.sub(r"^\s*brand[:\s]+", "", b, flags=re.I)
+    b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
+    b = re.sub(r"\s+store$", "", b, flags=re.I)
+    b = b.strip(" :|-‎‏")
+    return b or None
+
+
+def parse_rating(text):
+    if not text:
+        return None
+    m = re.search(r"([0-5](?:\.\d)?)\s*out of\s*5", text.lower())
+    return float(m.group(1)) if m else None
+
+
+def parse_review_count(text):
+    """Review/rating count from varied formats: '1,234 ratings', bare '1,234',
+    '(1,234)', '1.2K'. Returns None for rating text like '4.5 out of 5 stars'."""
+    if not text:
+        return None
+    t = text.lower().replace(",", "")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*([km])?\s*(?:global\s+)?(?:ratings?|reviews?)", t)
+    if not m:
+        m = re.search(r"^\(?\s*(\d+(?:\.\d+)?)\s*([km])?\s*\)?\s*$", t.strip())
+    if not m:
+        return None
+    val = float(m.group(1))
+    suffix = m.group(2)
+    if suffix == "k":
+        val *= 1_000
+    elif suffix == "m":
+        val *= 1_000_000
+    return int(val)
