@@ -56,3 +56,93 @@ def test_product_dict_avg_price():
     d = app._product_dict(p)
     assert d["avg_price"] == 20.0          # mean of 18 and 22, nulls skipped
     assert d["date_first_available"] == "2024-01-15"
+
+
+def test_product_dict_surfaces_delisted_at_and_last_seen():
+    # The UI uses these to hide delisted rows by default and to schedule
+    # the oldest-first refresh queue.
+    t = datetime.datetime(2026, 5, 29, 12, 0, 0)
+    p = models.Product(asin="B0GONE", last_seen=t, delisted_at=t)
+    d = app._product_dict(p)
+    assert d["last_seen"].startswith("2026-05-29")
+    assert d["delisted_at"].startswith("2026-05-29")
+    # A live product carries None.
+    live = models.Product(asin="B0LIVE", last_seen=t)
+    assert app._product_dict(live)["delisted_at"] is None
+
+
+def test_upsert_clears_delisted_at_on_reappearance():
+    # When a previously-delisted ASIN shows up again, the row is un-delisted
+    # so it rejoins the live queue. Uses a real in-memory SQLite session via
+    # models.init_db (which is what the running app uses).
+    os_environ = os.environ.copy()
+    try:
+        os.environ["BBA_DB"] = ":memory:"
+        import importlib
+        importlib.reload(models)
+        importlib.reload(app)
+        models.init_db()
+        sess = models.SessionLocal()
+        try:
+            sess.add(models.Product(asin="B0BACK", title="Bank",
+                                    first_seen=datetime.datetime.utcnow(),
+                                    last_seen=datetime.datetime.utcnow(),
+                                    delisted_at=datetime.datetime.utcnow()))
+            sess.commit()
+            assert sess.get(models.Product, "B0BACK").delisted_at is not None
+            app._upsert(sess, {"asin": "B0BACK", "title": "Bank", "price": 20.0,
+                               "in_stock": True})
+            sess.commit()
+            assert sess.get(models.Product, "B0BACK").delisted_at is None
+        finally:
+            sess.close()
+    finally:
+        os.environ.clear(); os.environ.update(os_environ)
+        importlib.reload(models); importlib.reload(app)
+
+
+def test_captcha_cooldown_until_when_recent_captcha():
+    os_environ = os.environ.copy()
+    try:
+        os.environ["BBA_DB"] = ":memory:"
+        # Use a short backoff so the post-window expiry case is easy to assert.
+        os.environ["BBA_CAPTCHA_BACKOFF_HOURS"] = "6"
+        import importlib
+        import config; importlib.reload(config)
+        importlib.reload(models)
+        importlib.reload(app)
+        models.init_db()
+        sess = models.SessionLocal()
+        try:
+            # Fresh CAPTCHA 1 minute ago -> we should be in cooldown.
+            recent = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+            sess.add(models.ScrapeRun(
+                trigger="hourly", started_at=recent, finished_at=recent,
+                status="partial", n_found=0,
+                notes="CAPTCHA at 0/40; [http-refresh ...]"))
+            sess.commit()
+            cool = app._captcha_cooldown_until(sess)
+            assert cool is not None
+            # Should be roughly 6h ahead of the failed run.
+            assert (cool - recent).total_seconds() == 6 * 3600
+            # A clean ok run should clear the cooldown.
+            sess.query(models.ScrapeRun).delete()
+            sess.add(models.ScrapeRun(
+                trigger="hourly", started_at=recent, finished_at=recent,
+                status="ok", n_found=10, notes="all good"))
+            sess.commit()
+            assert app._captcha_cooldown_until(sess) is None
+            # Old CAPTCHA (>backoff window) also clears.
+            old = datetime.datetime.utcnow() - datetime.timedelta(hours=12)
+            sess.query(models.ScrapeRun).delete()
+            sess.add(models.ScrapeRun(
+                trigger="hourly", started_at=old, finished_at=old,
+                status="partial", n_found=0, notes="CAPTCHA at 0/40"))
+            sess.commit()
+            assert app._captcha_cooldown_until(sess) is None
+        finally:
+            sess.close()
+    finally:
+        os.environ.clear(); os.environ.update(os_environ)
+        import importlib, config; importlib.reload(config)
+        importlib.reload(models); importlib.reload(app)
