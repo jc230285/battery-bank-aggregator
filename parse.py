@@ -13,7 +13,9 @@ DISPLAY_KEYS = ["lcd", "digital display", "display screen", "led display",
 PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough",
                     "simultaneous charging", "charge while charging",
                     "charge through", "charge and be charged",
-                    "use while charging"]
+                    "use while charging", "while charging the",
+                    "while being charged", "recharge while discharging",
+                    "charge and discharge simultaneously"]
 SOLAR_KEYS = ["solar", "photovoltaic", "mppt", "pv input", "pv charging"]
 
 
@@ -34,8 +36,8 @@ POSITIVE_KEYS = [
 # real power banks that merely bundle a cable/adapter are NOT excluded.
 STRONG_EXCLUDE = [
     "case for", "case only", "case replacement", "replacement for",
-    "carrying case", "travel case", "cover for", "sleeve for", "pouch for",
-    "bag for", "screen protector", "tempered glass",
+    "replacement battery", "carrying case", "travel case", "cover for",
+    "sleeve for", "pouch for", "bag for", "screen protector", "tempered glass",
 ]
 # Weaker signals: only disqualify when NO positive power-bank phrase is present
 # (so a standalone cable/charger/holder is dropped, but a power bank that

@@ -147,6 +147,14 @@ def test_detect_features_qi2_and_level_display():
     assert parse.detect_features("charge indicator display and pass-through charging")["display"]
 
 
+def test_is_battery_bank_replacement_battery():
+    # "Replacement Battery" is a phone/device battery, not a power bank.
+    assert not parse.is_battery_bank("Replacement Battery for Samsung S20 5000mAh", 5000)
+    assert not parse.is_battery_bank("Replacement Battery for iPhone 14 3279mAh")
+    # But a power bank that bundles a replacement cable is still a power bank.
+    assert parse.is_battery_bank("Power Bank 20000mAh with replacement cable", 20000)
+
+
 def test_detect_features_extended_display_and_passthrough():
     # LED indicator = display
     assert parse.detect_features("20000mAh with LED indicator for charge level")["display"]
@@ -160,6 +168,10 @@ def test_detect_features_extended_display_and_passthrough():
     assert parse.detect_features("charge through while topping up your phone")["passthrough"]
     # use while charging = passthrough
     assert parse.detect_features("use while charging for uninterrupted power")["passthrough"]
+    # "while charging the bank" = passthrough
+    assert parse.detect_features("charge your devices while charging the bank")["passthrough"]
+    # "recharge while discharging" = passthrough
+    assert parse.detect_features("Supports recharge while discharging")["passthrough"]
 
 
 def test_price_and_rating():
