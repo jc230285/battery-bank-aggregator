@@ -387,6 +387,19 @@ def _set_meta(session, key, value):
     meta.value = value
 
 
+def _analysis_cat(p):
+    """Analytical category for regression/scoring. Watchlist items are routed
+    to their natural product type so they get the correct hedonic model and
+    outlier comparison group rather than a separate 'watchlist' regression."""
+    if p.category != "watchlist":
+        return p.category or "power_bank"
+    if p.capacity_wh and not p.claimed_mah:
+        return "power_station"
+    if parse.is_power_station(p.title or ""):
+        return "power_station"
+    return "power_bank"
+
+
 def run_analysis(session):
     """Recompute all derived fields, computing market signals (outliers, regression,
     brand reputation) within each category. Returns {category: model}."""
@@ -401,7 +414,7 @@ def run_analysis(session):
 
     by_cat = {}
     for p in products:
-        by_cat.setdefault(p.category or "power_bank", []).append(p)
+        by_cat.setdefault(_analysis_cat(p), []).append(p)
 
     models = {}
     reps_all = {}

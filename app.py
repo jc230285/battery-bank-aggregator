@@ -199,6 +199,9 @@ def _data_is_stale():
 def _product_dict(p):
     hist_prices = [h.price for h in p.history if h.price is not None]
     avg_price = round(sum(hist_prices) / len(hist_prices), 2) if hist_prices else None
+    # Cap history sent to the browser at 60 entries — enough for a useful
+    # sparkline and keeps the page-load payload sane for long-tracked products.
+    recent = p.history[-60:]
     return {
         "asin": p.asin, "title": p.title, "brand": p.brand, "url": p.url,
         "image_url": p.image_url, "category": p.category or "power_bank",
@@ -221,7 +224,7 @@ def _product_dict(p):
         "last_seen": p.last_seen.isoformat() if p.last_seen else None,
         "delisted_at": p.delisted_at.isoformat() if p.delisted_at else None,
         "history": [{"t": h.captured_at.isoformat(), "price": h.price}
-                    for h in p.history if h.price is not None],
+                    for h in recent if h.price is not None],
     }
 
 
@@ -342,9 +345,11 @@ def run_hourly_refresh(trigger="hourly"):
 
         # Queue = oldest live products (delisted ones are kept in the DB for
         # price history but skipped here so we don't burn cycles checking dead
-        # listings). Watchlist items are always in the queue.
+        # listings). Watchlist items are always in the queue but are excluded
+        # from "oldest" so they don't consume batch slots meant for the catalog.
         oldest = (session.query(Product.asin)
                   .filter(Product.delisted_at.is_(None))
+                  .filter(Product.category != "watchlist")
                   .order_by(Product.last_seen.asc())
                   .limit(config.HOURLY_BATCH_SIZE).all())
         watchlist = (session.query(Product.asin)

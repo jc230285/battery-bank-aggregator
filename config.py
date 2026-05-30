@@ -73,10 +73,12 @@ CACHE_TTL_HOURS = _int("BBA_CACHE_TTL_HOURS", 24 * 14)
 BRAND_BANKS = [
     "Anker", "UGREEN", "Baseus", "INIU", "Charmast",
     "VEGER", "Romoss", "Cuktech", "Zendure", "Xiaomi",
+    "Belkin", "Mophie", "Verbatim", "Energizer", "Miady",
 ]
 BRAND_STATIONS = [
     "EcoFlow", "Jackery", "BLUETTI", "Anker SOLIX", "Goal Zero",
     "Allpowers", "Oukitel", "Fossibot", "VTOMAN", "Pecron",
+    "Renogy", "Growatt", "Aferiy", "Poweroak", "BioLite",
 ]
 
 # Physics: Li-ion energy density ceiling (generous) and nominal cell voltage.

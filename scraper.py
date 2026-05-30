@@ -564,6 +564,11 @@ def refresh_asins_http(asins, on_item=None, on_progress=None, on_delisted=None):
             on_progress(phase, done, total)
 
     for i, asin in enumerate(asins):
+        # Delay before every request (not just successful ones) so error chains
+        # (e.g. 20 consecutive 404s) can't produce rapid-fire bursts. The first
+        # request gets a short jitter rather than a full 2-6 s pause.
+        time.sleep(random.uniform(0.5, 1.5) if i == 0
+                   else random.uniform(config.MIN_DELAY_S, config.MAX_DELAY_S))
         progress("refreshing", i, len(asins))
         url = f"https://www.amazon.co.uk/dp/{asin}?th=1"
         try:
@@ -603,7 +608,6 @@ def refresh_asins_http(asins, on_item=None, on_progress=None, on_delisted=None):
                 on_item(detail)
             except Exception as e:  # noqa: BLE001
                 log.warning("on_item failed for %s: %s", asin, e)
-        time.sleep(random.uniform(config.MIN_DELAY_S, config.MAX_DELAY_S))
 
     if not items and status == "ok":
         status = "failed"

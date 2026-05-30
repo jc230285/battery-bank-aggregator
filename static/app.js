@@ -229,7 +229,10 @@
     const delta = Math.abs(pct) >= 1
       ? `<span class="${colour} text-[10px] ml-1" title="change since first recorded price">${sign}${pct.toFixed(0)}%</span>`
       : "";
-    return `<span class="inline-flex items-center"><svg width="${w}" height="${ht}" title="recorded price history"><polyline fill="none" stroke="${up ? '#f87171' : '#34d399'}" stroke-width="1.5" points="${pts}"/></svg>${delta}</span>`;
+    const t0 = new Date(h[0].t).toLocaleDateString("en-GB");
+    const t1 = new Date(h[h.length - 1].t).toLocaleDateString("en-GB");
+    const tip = `${h.length} price points · £${min.toFixed(2)}–£${max.toFixed(2)} · ${t0} → ${t1}`;
+    return `<span class="inline-flex items-center"><svg width="${w}" height="${ht}" title="${esc(tip)}" class="inline-block align-middle"><polyline fill="none" stroke="${up ? '#f87171' : '#34d399'}" stroke-width="1.5" points="${pts}"/></svg>${delta}</span>`;
   }
 
   // Percentile-based Deal cutoff (set per render). The regression's absolute
