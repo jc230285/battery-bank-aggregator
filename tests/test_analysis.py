@@ -97,6 +97,19 @@ def test_capacity_wh_of_chemistry_aware():
     assert 63 < wh < 65
 
 
+def test_brand_trusted_no_bare_substring():
+    # "Anker PowerCore" is trusted (brand is the leading word).
+    assert analysis.brand_trusted("Anker PowerCore")
+    assert analysis.brand_trusted("EF ECOFLOW DELTA Pro")
+    # Concatenated / adjacent strings must NOT be trusted — "anker" in "ankerdirect"
+    # is a substring but NOT a separate leading word.
+    assert not analysis.brand_trusted("AnkerDirect")
+    assert not analysis.brand_trusted("EcoFlowEnergy")  # no space boundary
+    # Exact matches still work regardless of case.
+    assert analysis.brand_trusted("Anker")
+    assert analysis.brand_trusted("anker")
+
+
 def test_brand_subscore():
     assert analysis.brand_subscore("Anker")[0] == 1.0
     assert analysis.brand_subscore("Anker PowerCore")[0] == 1.0

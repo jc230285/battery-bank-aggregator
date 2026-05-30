@@ -125,7 +125,13 @@ def brand_trusted(brand):
     if not brand:
         return False
     b = brand.strip().lower()
-    return any(tb.lower() == b or tb.lower() in b for tb in config.TRUSTED_BRANDS)
+    # Exact match OR brand is the first word(s) of a compound name like
+    # "Anker PowerCore" or "EF ECOFLOW DELTA". Bare substring ("anker" in
+    # "ankerdirect") is rejected — it would let copycats inherit trust.
+    return any(
+        tb.lower() == b or b.startswith(tb.lower() + " ")
+        for tb in config.TRUSTED_BRANDS
+    )
 
 
 def cost_per_mah(price, mah):
