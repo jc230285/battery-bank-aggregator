@@ -142,9 +142,15 @@ def extract_weight_g(text):
     t = t.lower().replace(",", "")
 
     candidates = []
-    m = re.search(r"weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+    # Prefer "item weight" / "product weight" over "shipping weight" (shipping
+    # includes packaging and overstates the product weight).
+    m = re.search(r"(?:item|product)\s+weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
     if m:
         candidates.append(_to_grams(float(m.group(1)), m.group(2)))
+    else:
+        m = re.search(r"weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+        if m:
+            candidates.append(_to_grams(float(m.group(1)), m.group(2)))
     m = re.search(r"[;:]\s*(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
     if m:
         candidates.append(_to_grams(float(m.group(1)), m.group(2)))

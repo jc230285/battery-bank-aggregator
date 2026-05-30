@@ -45,6 +45,16 @@ def test_extract_weight_units():
     assert parse.extract_weight_g("Weight: 9.2 kg") == 9200
 
 
+def test_extract_weight_item_over_shipping():
+    # "Item Weight" should win over "Shipping Weight" even when shipping appears first.
+    assert parse.extract_weight_g(
+        "Shipping Weight: 550 g. Item Weight: 430 g") == 430
+    assert parse.extract_weight_g(
+        "Shipping Weight 600g, Product Weight 350g") == 350
+    # When only shipping weight is present, fall back to it.
+    assert parse.extract_weight_g("Shipping Weight: 430 g") == 430
+
+
 def test_extract_weight_amazon_formats():
     # Amazon spec rows with invisible directionality marks around the colon
     assert parse.extract_weight_g("Item Weight ‏ : ‎ 350 Grams") == 350
