@@ -15,7 +15,8 @@ PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough",
                     "charge through", "charge and be charged",
                     "use while charging", "while charging the",
                     "while being charged", "recharge while discharging",
-                    "charge and discharge simultaneously"]
+                    "charge and discharge simultaneously",
+                    "while charging"]
 SOLAR_KEYS = ["solar", "photovoltaic", "mppt", "pv input", "pv charging"]
 
 
@@ -550,6 +551,8 @@ def clean_brand(text):
     b = re.sub(r"\s+" + _STORE_QUALIFIERS + r"\s*$", "", b, flags=re.I)
     # Strip corporate suffixes: "Jackery, Inc." -> "Jackery"
     b = re.sub(r",?\s*\b(?:inc|ltd|llc|co|corp|plc|gmbh|bv|ag|s\.a|s\.l|oy|ab)\b\.?\s*$", "", b, flags=re.I)
+    # Strip trailing parenthetical qualifiers: "Anker (Official)" -> "Anker"
+    b = re.sub(r"\s*\([^)]*\)\s*$", "", b)
     b = b.strip(" :,|-‎‏")
     if _looks_like_seller_code(b):
         return None

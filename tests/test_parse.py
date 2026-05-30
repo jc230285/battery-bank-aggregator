@@ -172,6 +172,8 @@ def test_detect_features_extended_display_and_passthrough():
     assert parse.detect_features("charge your devices while charging the bank")["passthrough"]
     # "recharge while discharging" = passthrough
     assert parse.detect_features("Supports recharge while discharging")["passthrough"]
+    # "while charging" alone (implicit object) = passthrough
+    assert parse.detect_features("charge your phone while charging")["passthrough"]
 
 
 def test_price_and_rating():
@@ -278,6 +280,10 @@ def test_clean_brand_corporate_suffixes():
     assert parse.clean_brand("EcoFlow Co.") == "EcoFlow"
     assert parse.clean_brand("NAME: Baseus") == "Baseus"
     assert parse.clean_brand("MANUFACTURER: EcoFlow") == "EcoFlow"
+    # Trailing parenthetical qualifiers should be stripped.
+    assert parse.clean_brand("Anker (Official)") == "Anker"
+    assert parse.clean_brand("Baseus (UK)") == "Baseus"
+    assert parse.clean_brand("EcoFlow (Authorized)") == "EcoFlow"
 
 
 def test_asin_from_url():
