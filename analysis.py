@@ -449,9 +449,7 @@ def _backfill_from_raw_specs(products):
     re-scraped.  Running the current extractors against the cached
     raw_specs text fills the gaps without needing an extra HTTP round-trip."""
     for p in products:
-        specs = p.raw_specs
-        if not specs:
-            continue
+        specs = p.raw_specs or {}
         blob = " ".join(filter(None, [p.title or "", specs.get("bullets", ""), specs.get("details", "")]))
         if not blob:
             continue

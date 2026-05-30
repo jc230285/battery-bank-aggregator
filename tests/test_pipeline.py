@@ -179,6 +179,27 @@ def test_self_consistency_uses_stated_wh_not_derived():
         "inflated Wh vs mAh must be flagged by self_consistency_subscore")
 
 
+def test_backfill_works_without_raw_specs():
+    """Backfill must run from the title alone when raw_specs is None or {}."""
+    s = _session()
+    s.add(models.Product(
+        asin="NRS1", title="LiFePO4 Power Bank 20000mAh", brand="NoName",
+        price=35, claimed_mah=None, chemistry=None, raw_specs=None,
+    ))
+    s.add(models.Product(
+        asin="NRS2", title="Power Bank 10000mAh Qi wireless charging", brand="NoName",
+        price=20, claimed_mah=None, wireless=False, raw_specs={},
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    p1 = s.get(models.Product, "NRS1")
+    p2 = s.get(models.Product, "NRS2")
+    assert p1.claimed_mah == 20000, "mAh from title with no raw_specs"
+    assert p1.chemistry == "lifepo4", "chemistry from title with no raw_specs"
+    assert p2.claimed_mah == 10000, "mAh from title with empty raw_specs"
+    assert p2.wireless is True, "wireless feature from title with empty raw_specs"
+
+
 def test_backfill_uses_title_when_specs_empty():
     """If raw_specs bullets/details are empty but the title has parseable data,
     backfill should still recover the field."""
