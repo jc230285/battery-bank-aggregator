@@ -195,6 +195,11 @@ def test_hedonic_and_value():
     assert model is not None
     # capacity coefficient should be ~1 (£ per 1000 mAh).
     assert abs(model["coef"]["capacity_kmah"] - 1.0) < 0.5
-    # feature_contributions are non-negative and include capacity.
+    # feature_contributions are non-negative and include capacity + brand_trust.
     contrib = analysis.feature_contributions(model, products[0], "power_bank")
     assert "capacity" in contrib and contrib["capacity"] >= 0
+    assert "brand_trust" in contrib
+    # contrib values + intercept should sum close to fair_price.
+    fp = analysis.fair_price(model, products[0], "power_bank")
+    total = model["intercept"] + sum(contrib.values())
+    assert abs(total - fp) < 1.0

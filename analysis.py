@@ -374,6 +374,7 @@ def feature_contributions(model, p, category):
     if not model:
         return {}
     c = model["coef"]
+    brand_val = c["brand_trust"] if brand_trusted(p.brand) else 0.0
     if category == "power_station":
         raw = {
             "capacity": c["capacity_kwh"] * ((p.capacity_wh or 0) / 1000.0),
@@ -384,6 +385,7 @@ def feature_contributions(model, p, category):
             "cycle_life": c["cycle_life"] * (p.cycle_life or 0),
             "expandable": c["expandable"] if p.expandable else 0.0,
             "ups": c["ups"] if p.ups else 0.0,
+            "brand_trust": brand_val,
             "rating": c["rating"] * (p.rating or 0),
         }
     else:
@@ -395,6 +397,7 @@ def feature_contributions(model, p, category):
             "display": c["display"] if p.display else 0.0,
             "passthrough": c["passthrough"] if p.passthrough else 0.0,
             "solar": c["solar"] if p.solar else 0.0,
+            "brand_trust": brand_val,
             "rating": c["rating"] * (p.rating or 0),
         }
     return {k: round(max(0.0, float(v)), 2) for k, v in raw.items()}
