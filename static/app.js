@@ -292,6 +292,20 @@
   }
   const _CRITICAL_FLAGS = new Set(["impossible_capacity", "reviews_report_fake_capacity"]);
   const _WARN_FLAGS = new Set(["too_cheap_per_capacity", "inconsistent_capacity_claims"]);
+  const _FLAG_LABELS = {
+    impossible_capacity:          "Capacity overstated",
+    reviews_report_fake_capacity: "Reviewers report fake capacity",
+    too_cheap_per_capacity:       "Suspiciously cheap per capacity",
+    inconsistent_capacity_claims: "mAh/Wh figures don't match",
+    unverified_brand:             "Unverified brand",
+    unknown_brand:                "Unknown brand",
+    brand_low_reputation:         "Low brand reputation",
+  };
+  function _flagLabel(f) {
+    if (_FLAG_LABELS[f]) return _FLAG_LABELS[f];
+    if (f.startsWith("brand_mimics_")) { const b = f.slice(13).replace(/_/g, " "); return `Mimics ${b.charAt(0).toUpperCase() + b.slice(1)}`; }
+    return f.replace(/_/g, " ");
+  }
   function honestyFlagBubbles(p) {
     return (p.honesty_flags || []).map(f => {
       const critical = _CRITICAL_FLAGS.has(f) || f.startsWith("brand_mimics_");
@@ -299,7 +313,7 @@
       const cls = critical ? "bg-red-900 text-red-200"
                 : warn     ? "bg-amber-900 text-amber-200"
                 :            "bg-slate-700 text-slate-400";
-      return `<span class="badge ${cls}" title="${f.replace(/_/g, " ")}">${f.replace(/_/g, " ")}</span>`;
+      return `<span class="badge ${cls}" title="${f}">${_flagLabel(f)}</span>`;
     }).join(" ");
   }
   function valueBreakdown(p) {
