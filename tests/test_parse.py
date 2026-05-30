@@ -104,6 +104,21 @@ def test_extract_cycle_life_hyphen():
     assert parse.extract_cycle_life("rated for a 3000 cycle life") == 3000
 
 
+def test_extract_cycle_life_slash_and_full_charges():
+    # "charge/discharge" with slash separator must match.
+    assert parse.extract_cycle_life("up to 2000 charge/discharge cycles") == 2000
+    # "full charges" (without 're') must also match.
+    assert parse.extract_cycle_life("rated for 500 full charges") == 500
+    assert parse.extract_cycle_life("rated for 500 charges") == 500
+
+
+def test_extract_weight_metric_over_imperial():
+    # When both g and lb appear in the same string (e.g. "500g / 1.1lb"),
+    # the metric value must win over the imperial conversion.
+    assert parse.extract_weight_g("500g / 1.1lb") == 500.0
+    assert parse.extract_weight_g("250g (8.8oz)") == 250.0
+
+
 def test_extract_watts_equals_separator():
     # "5V=3A" style used by some listings (equals sign as separator)
     pd, mx = parse.extract_watts("Output: 5V=3A, 9V=2A, 12V=1.5A")

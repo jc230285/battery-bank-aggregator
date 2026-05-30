@@ -168,11 +168,12 @@ def extract_weight_g(text):
     m = re.search(r"[;:]\s*(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
     if m:
         candidates.append(_to_grams(float(m.group(1)), m.group(2)))
+    # Prefer metric units (g/kg) over imperial (lb/oz) when both present.
     for unit_re, factor in (
         (r"(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)\b", 1000.0),
+        (r"(\d+(?:\.\d+)?)\s*(?:grams?|gr|g)\b", 1.0),
         (r"(\d+(?:\.\d+)?)\s*(?:lbs?|lb|pounds?)\b", 453.592),
         (r"(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b", 28.3495),
-        (r"(\d+(?:\.\d+)?)\s*(?:grams?|gr|g)\b", 1.0),
     ):
         m = re.search(unit_re, t)
         if m:
@@ -464,8 +465,8 @@ def extract_cycle_life(text):
         return None
     t = text.lower().replace(",", "")
     patterns = [
-        r"(\d{3,5})\s*\+?\s*(?:(?:complete|full|deep|charge[\s\-]discharge)\s+)?(?:charge[\s\-](?:discharge[\s\-])?)?cycles?",
-        r"(\d{3,5})\s*\+?\s*(?:full\s*)?recharges?",
+        r"(\d{3,5})\s*\+?\s*(?:(?:complete|full|deep|charge[\s\-/]discharge)\s+)?(?:charge[\s\-/](?:discharge[\s\-/])?)?cycles?",
+        r"(\d{3,5})\s*\+?\s*(?:full\s*)?(?:re)?charges?",
         r"(?:life\s*cycles?|cycle\s*life)[^\d]{0,20}(\d{3,5})",
         r"(?:recharg\w*|charg\w*)\s+(\d{3,5})\s*\+?\s*times?",
         r"(\d{3,5})\s*\+?\s*times?\s+(?:recharg|charg)",
