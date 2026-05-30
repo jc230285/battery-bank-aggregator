@@ -345,7 +345,9 @@ def extract_ac_output_w(text):
             best = max(best or 0, v)
     # Fallback for power-station titles/specs that lead with the rated wattage
     # without an explicit "AC output" label — e.g. "Power Station, 1800W (Peak 2400W)".
-    if best is None and ("power station" in t or "power bank station" in t):
+    _station_terms = ("power station", "power bank station", "energy station",
+                      "energy storage station", "battery generator")
+    if best is None and any(k in t for k in _station_terms):
         for m in re.finditer(r"(\d{3,4})\s*w\b", t):
             v = int(m.group(1))
             if 100 <= v <= 8000 and v not in surge:
@@ -359,11 +361,15 @@ def extract_ac_sockets(text):
         return None
     t = text.lower()
     cnt = 0
-    for m in re.finditer(r"(\d+)\s*[x×]?\s*(?:ac (?:output|socket|outlet|port)|uk socket|mains socket)", t):
+    _socket_kws = (r"ac (?:output|socket|outlet|port)", r"uk (?:socket|plug|outlet)",
+                   r"mains (?:socket|outlet|plug)", r"schuko", r"household (?:socket|outlet)",
+                   r"standard (?:socket|outlet)", r"grounded (?:socket|outlet)")
+    _kw_pat = "|".join(_socket_kws)
+    for m in re.finditer(rf"(\d+)\s*[x×]?\s*(?:{_kw_pat})", t):
         cnt = max(cnt, int(m.group(1)))
-    for m in re.finditer(r"ac (?:output|socket|outlet)s?\s*[x×]\s*(\d+)", t):
+    for m in re.finditer(rf"(?:{_kw_pat})s?\s*[x×]\s*(\d+)", t):
         cnt = max(cnt, int(m.group(1)))
-    if cnt == 0 and re.search(r"ac (?:output|socket|outlet)|mains socket", t):
+    if cnt == 0 and re.search(_kw_pat, t):
         cnt = 1
     return cnt or None
 

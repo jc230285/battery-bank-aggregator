@@ -257,5 +257,10 @@ def test_extract_ac_output_w_unlabelled_power_station():
     # Explicit label still works.
     assert parse.extract_ac_output_w(
         "EcoFlow DELTA 2 Portable Power Station 1024Wh, 1800W AC Output") == 1800
+    # New power station keyword aliases also trigger the fallback.
+    assert parse.extract_ac_output_w(
+        "ALLPOWERS R600 Energy Storage Station 299Wh 600W") == 600
+    assert parse.extract_ac_output_w(
+        "Bluetti AC200P Battery Generator 2000Wh 2000W") == 2000
     # Non-station product must not get a spurious value.
     assert parse.extract_ac_output_w("PowerBank 10000mAh USB-C") is None
