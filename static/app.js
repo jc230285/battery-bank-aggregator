@@ -217,10 +217,15 @@
   function cmp(a, b) {
     const f = SORT_ACCESSORS[state.sortKey] || (() => 0);
     let va = f(a), vb = f(b);
+    if (va == null && vb == null) return a.asin < b.asin ? -1 : 1;
     if (va == null) return 1;
     if (vb == null) return -1;
-    if (typeof va === "string") return va.localeCompare(vb) * state.sortDir;
-    return (va - vb) * state.sortDir;
+    if (typeof va === "string") {
+      const d = va.localeCompare(vb) * state.sortDir;
+      return d !== 0 ? d : a.asin < b.asin ? -1 : 1;
+    }
+    const d = (va - vb) * state.sortDir;
+    return d !== 0 ? d : a.asin < b.asin ? -1 : 1;
   }
 
   // ---- cell renderers ----
