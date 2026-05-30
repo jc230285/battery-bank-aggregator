@@ -53,6 +53,7 @@
     ["price", "Price-per-capacity outlier"],
     ["brand", "Brand trust"],
     ["reviews", "Review text"],
+    ["consistency", "mAh/Wh self-consistency"],
   ];
 
   // ---- filters (declarative, per category) ----
@@ -122,7 +123,7 @@
     category: "power_bank",
     filtersByCat: { power_bank: { honesty: 0 }, power_station: { honesty: 0 }, watchlist: {} },
     honestyWeights: Object.assign(
-      { physics: 0.4, price: 0.25, brand: 0.2, reviews: 0.15 }, D.honesty_weights || {}),
+      { physics: 0.35, price: 0.20, brand: 0.2, reviews: 0.15, consistency: 0.10 }, D.honesty_weights || {}),
     weightsByCat: {
       power_bank: Object.fromEntries(FACTORS_BY_CAT.power_bank.map(([k]) => [k, 0])),
       power_station: Object.fromEntries(FACTORS_BY_CAT.power_station.map(([k]) => [k, 0])),

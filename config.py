@@ -97,10 +97,11 @@ ENERGY_DENSITY_WH_PER_KG = {
 
 # Honesty scoring default weights (UI-adjustable). Physics weighted highest.
 DEFAULT_HONESTY_WEIGHTS = {
-    "physics": 0.40,
-    "price": 0.25,
+    "physics": 0.35,
+    "price": 0.20,
     "brand": 0.20,
     "reviews": 0.15,
+    "consistency": 0.10,
 }
 
 # Brand reputation (for unverified brands): a volume-weighted average rating,
