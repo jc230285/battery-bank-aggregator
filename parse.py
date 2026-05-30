@@ -348,7 +348,7 @@ def extract_wh(text):
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t):
         if not _skipped(m.start()):
             vals.append(float(m.group(1)) * 1000)
-    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*wh\b", t):
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*whr?\b", t):
         if not _skipped(m.start()):
             vals.append(float(m.group(1)))
     vals = [v for v in vals if 50 <= v <= 20000]

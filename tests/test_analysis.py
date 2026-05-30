@@ -217,9 +217,10 @@ def test_brand_mimicry_catches_typosquats_only():
     assert analysis.brand_mimicry_flag("Anker") is None
     assert analysis.brand_mimicry_flag("Anker Innovations") is None
     assert analysis.brand_mimicry_flag(None) is None
-    # Typosquat that doesn't contain the trusted name as a substring -> flagged
-    flag = analysis.brand_mimicry_flag("Ankur")
-    assert flag == "brand_mimics_anker"
+    # Substitution typosquat: 'u' for 'e'
+    assert analysis.brand_mimicry_flag("Ankur") == "brand_mimics_anker"
+    # Transposition typosquat: adjacent chars swapped (Damerau-Levenshtein)
+    assert analysis.brand_mimicry_flag("Ankre") == "brand_mimics_anker"
     # Genuinely unrelated unknown brand -> no flag
     assert analysis.brand_mimicry_flag("ZorgBat") is None
 

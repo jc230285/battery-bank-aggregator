@@ -73,8 +73,9 @@ def self_consistency_subscore(claimed_mah, capacity_wh, chemistry=None):
 
 
 def _edit_distance(a, b):
-    """Plain Levenshtein. Short-circuits when the length gap already exceeds 2
-    so iterating over the brand catalog is cheap."""
+    """Optimal string alignment (restricted Damerau-Levenshtein). Counts
+    insertions, deletions, substitutions, and adjacent transpositions each as
+    1 edit. Short-circuits when the length gap already exceeds 2."""
     if a == b:
         return 0
     if not a or not b:
@@ -83,13 +84,19 @@ def _edit_distance(a, b):
         a, b = b, a
     if len(a) - len(b) > 2:
         return 99
+    prev2 = list(range(len(b) + 1))
     prev = list(range(len(b) + 1))
+    prev2 = [0] * (len(b) + 1)
     for i, ca in enumerate(a, 1):
         cur = [i]
         for j, cb in enumerate(b, 1):
             cost = 0 if ca == cb else 1
-            cur.append(min(cur[-1] + 1, prev[j] + 1, prev[j - 1] + cost))
-        prev = cur
+            val = min(cur[-1] + 1, prev[j] + 1, prev[j - 1] + cost)
+            # Transposition: swap of two adjacent characters
+            if i > 1 and j > 1 and ca == b[j - 2] and a[i - 2] == cb:
+                val = min(val, prev2[j - 2] + cost)
+            cur.append(val)
+        prev2, prev = prev, cur
     return prev[-1]
 
 
