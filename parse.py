@@ -85,6 +85,9 @@ def extract_mah(text):
     if not text:
         return None
     t = text.lower().replace(",", "")
+    # European thousands separator: "40.000mAh" means 40,000 mAh.
+    # Pattern: 1-4 digits, a period, exactly 3 digits, directly before mAh.
+    t = re.sub(r"(\d{1,4})\.(\d{3})(?=\s*m\s*a\s*h)", lambda m: m.group(1) + m.group(2), t)
     vals = [int(x) for x in re.findall(r"(\d{3,7})\s*m\s*a\s*h", t)]
     vals = [v for v in vals if 500 <= v <= 500000]
     if vals:
@@ -540,12 +543,14 @@ def clean_brand(text):
     m = re.search(r"visit the\s+(.+?)\s+store\b", b, re.I)
     if m:
         b = m.group(1)
-    b = re.sub(r"^\s*brand[:\s]+", "", b, flags=re.I)
+    b = re.sub(r"^\s*(?:brand|name|manufacturer)[:\s]+", "", b, flags=re.I)
     b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
     b = re.sub(r"\s+store$", "", b, flags=re.I)
     # Strip trailing Amazon store qualifiers that aren't part of the brand name.
     b = re.sub(r"\s+" + _STORE_QUALIFIERS + r"\s*$", "", b, flags=re.I)
-    b = b.strip(" :|-‎‏")
+    # Strip corporate suffixes: "Jackery, Inc." -> "Jackery"
+    b = re.sub(r",?\s*\b(?:inc|ltd|llc|co|corp|plc|gmbh|bv|ag|s\.a|s\.l|oy|ab)\b\.?\s*$", "", b, flags=re.I)
+    b = b.strip(" :,|-‎‏")
     if _looks_like_seller_code(b):
         return None
     return b or None

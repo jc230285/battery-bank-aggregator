@@ -264,6 +264,22 @@ def test_clean_brand_rejects_seller_codes():
     assert parse.clean_brand("Brand: NoName") == "NoName"
 
 
+def test_extract_mah_european_decimal():
+    # "40.000mAh" is European thousands format (40,000 mAh), not 40.0 mAh.
+    assert parse.extract_mah("40.000mAh Power Bank") == 40000
+    assert parse.extract_mah("26.800 mAh") == 26800
+    # Ensure normal decimals aren't broken.
+    assert parse.extract_mah("20000mAh") == 20000
+
+
+def test_clean_brand_corporate_suffixes():
+    assert parse.clean_brand("Jackery, Inc.") == "Jackery"
+    assert parse.clean_brand("Anker Ltd.") == "Anker"
+    assert parse.clean_brand("EcoFlow Co.") == "EcoFlow"
+    assert parse.clean_brand("NAME: Baseus") == "Baseus"
+    assert parse.clean_brand("MANUFACTURER: EcoFlow") == "EcoFlow"
+
+
 def test_asin_from_url():
     assert parse.asin_from_url("https://www.amazon.co.uk/dp/B0ABCD1234?th=1") == "B0ABCD1234"
     assert parse.asin_from_url("/gp/product/B07XYZ8901/") == "B07XYZ8901"
