@@ -207,6 +207,7 @@
   }
   const SORT_ACCESSORS = {
     title: p => (p.title || "").toLowerCase(), price: p => p.price, avg: p => p.avg_price,
+    listing_position: p => p.listing_position,
     claimed_mah: p => p.claimed_mah, cost_per_mah: p => p.cost_per_mah,
     capacity_wh: p => p.capacity_wh, cost_per_wh: p => p.cost_per_wh,
     ac_output_w: p => p.ac_output_w, rating: p => p.rating, reviews: p => p.review_count,
@@ -374,7 +375,8 @@
         : "";
       const age = ageAgo(p.last_seen);
       const ageHtml = age ? `<span class="text-[9px] text-slate-600 ml-1" title="Last seen: ${esc(p.last_seen || '')}">${esc(age)}</span>` : "";
-      return `<td class="px-2 py-2 max-w-sm"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer" class="text-sky-300 hover:underline line-clamp-2">${esc(p.title || p.asin)}</a>${rm}<div class="text-xs text-slate-500">${esc(p.brand || "?")}${p.chemistry ? " · " + esc(p.chemistry) : ""}${ageHtml}</div></td>`;
+      const rankHtml = p.listing_position ? `<span class="text-[9px] text-slate-600 ml-1" title="Amazon search rank">#${p.listing_position}</span>` : "";
+      return `<td class="px-2 py-2 max-w-sm"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer" class="text-sky-300 hover:underline line-clamp-2">${esc(p.title || p.asin)}</a>${rm}<div class="text-xs text-slate-500">${esc(p.brand || "?")}${p.chemistry ? " · " + esc(p.chemistry) : ""}${ageHtml}${rankHtml}</div></td>`;
     },
     price: priceCell,
     mah: p => {

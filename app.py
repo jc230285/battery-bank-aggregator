@@ -233,6 +233,7 @@ def _product_dict(p):
     return {
         "asin": p.asin, "title": p.title, "brand": p.brand, "url": p.url,
         "image_url": p.image_url, "category": p.category or "power_bank",
+        "listing_position": p.listing_position,
         "price": p.price, "in_stock": p.in_stock,
         "rating": p.rating, "review_count": p.review_count,
         "claimed_mah": p.claimed_mah, "capacity_wh": p.capacity_wh,
