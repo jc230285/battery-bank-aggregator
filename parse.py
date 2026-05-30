@@ -214,9 +214,9 @@ def extract_watts(text):
         v = float(m.group(1))
         if 1 <= v <= 300:
             pd_w = max(pd_w or 0, v)
-    # Wattage after "PD": "PD 20W", "PD3.0 65W", "Power Delivery: 65W".
+    # Wattage after "PD": "PD 20W", "PD3.0 65W", "Power Delivery: 65W", "(PD, 30W)".
     for m in re.finditer(
-            r"(?:pd|power delivery)(?:\d+(?:\.\d+)?)?\s*(?:charging|output|input)?\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*w", t):
+            r"(?:pd|power delivery)(?:\d+(?:\.\d+)?)?\s*(?:charging|output|input)?\s*[:\-,]?\s*(\d+(?:\.\d+)?)\s*w", t):
         v = float(m.group(1))
         if 1 <= v <= 300:
             pd_w = max(pd_w or 0, v)
@@ -454,6 +454,7 @@ def extract_cycle_life(text):
         r"(?:life\s*cycles?|cycle\s*life)[^\d]{0,20}(\d{3,5})",
         r"(?:recharg\w*|charg\w*)\s+(\d{3,5})\s*\+?\s*times?",
         r"(\d{3,5})\s*\+?\s*times?\s+(?:recharg|charg)",
+        r"(\d{3,5})[\s\-]cycle",    # "2000-cycle lifespan", "3000 cycle life"
     ]
     for pat in patterns:
         m = re.search(pat, t)

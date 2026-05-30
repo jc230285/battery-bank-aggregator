@@ -93,6 +93,17 @@ def test_extract_watts_pd():
     assert pd4 == 140
 
 
+def test_extract_watts_pd_comma():
+    # "(PD, 30W)" — comma between PD label and wattage
+    pd, mx = parse.extract_watts("USB-C 1 (PD, 30W), USB-C 2 (15W)")
+    assert pd == 30.0 and mx == 30.0
+
+
+def test_extract_cycle_life_hyphen():
+    assert parse.extract_cycle_life("2000-cycle lifespan") == 2000
+    assert parse.extract_cycle_life("rated for a 3000 cycle life") == 3000
+
+
 def test_extract_watts_equals_separator():
     # "5V=3A" style used by some listings (equals sign as separator)
     pd, mx = parse.extract_watts("Output: 5V=3A, 9V=2A, 12V=1.5A")
