@@ -253,11 +253,12 @@ def extract_chemistry(text):
         return "lifepo4"
     if "lithium titanate" in t or re.search(r"\blto\b", t):
         return "lto"
-    if "nmc" in t or "ternary lithium" in t:
+    if any(k in t for k in ("nmc", "ncm", "ternary lithium")):
         return "nmc"
     if any(k in t for k in ("lithium polymer", "li-polymer", "li-po", "lipo", "polymer battery", "polymer cell")):
         return "li-po"
-    if any(k in t for k in ("lithium-ion", "lithium ion", "li-ion", "liion", "lithium battery")):
+    if any(k in t for k in ("lithium-ion", "lithium ion", "li-ion", "liion",
+                            "lithium battery", "lithium batteries")):
         return "li-ion"
     return None
 

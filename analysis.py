@@ -417,6 +417,8 @@ def _backfill_from_raw_specs(products):
         blob = " ".join(filter(None, [specs.get("bullets", ""), specs.get("details", "")]))
         if not blob:
             continue
+        if p.chemistry is None:
+            p.chemistry = parse.extract_chemistry(blob)
         if p.ac_output_w is None:
             p.ac_output_w = parse.extract_ac_output_w(blob)
         if p.solar_input_w is None:
