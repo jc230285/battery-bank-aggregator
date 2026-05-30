@@ -75,6 +75,7 @@ def run_cycle(trigger="manual", full=False):
         """Persist one product immediately with partial scores so rows appear live."""
         p = _upsert(session, item)
         p.cost_per_mah = analysis.cost_per_mah(p.price, p.claimed_mah)
+        p.cost_per_wh = analysis.cost_per_wh(p.price, p.capacity_wh)
         phys, f_phys = analysis.physics_subscore(
             analysis.capacity_wh_of(p), p.weight_g, p.chemistry)
         brand, f_brand = analysis.brand_subscore(p.brand)

@@ -205,6 +205,7 @@
     capacity_wh: p => p.capacity_wh, cost_per_wh: p => p.cost_per_wh,
     ac_output_w: p => p.ac_output_w, rating: p => p.rating, reviews: p => p.review_count,
     honesty: p => honestyScore(p), value: p => valueToYou(p), price_delta: p => p.price_delta,
+    all_time_low: p => p.all_time_low,
   };
   function cmp(a, b) {
     const f = SORT_ACCESSORS[state.sortKey] || (() => 0);
@@ -257,9 +258,17 @@
     const tip = `Price £${p.price.toFixed(2)} vs fair £${p.fair_price.toFixed(2)} (${pct.toFixed(0)}%) — among top deals in the filtered list`;
     return `<span class="badge bg-emerald-700 text-emerald-100" title="${tip}">Deal ${pct.toFixed(0)}%</span> `;
   }
+  function _featureCat(p) {
+    if (p.category === "power_station") return "power_station";
+    if (p.category !== "watchlist") return "power_bank";
+    // Watchlist: infer from available data (mirrors analysis._analysis_cat logic)
+    if (p.capacity_wh && !p.claimed_mah) return "power_station";
+    if (p.ac_output_w) return "power_station";
+    return "power_bank";
+  }
   function featureIcons(p) {
     const out = [];
-    if (p.category === "power_station") {
+    if (_featureCat(p) === "power_station") {
       if (p.ac_output_w) out.push(`${p.ac_output_w}W AC`);
       if (p.ac_sockets) out.push(`${p.ac_sockets}×AC`);
       if (p.solar_input_w) out.push(`${p.solar_input_w}W solar`);
@@ -340,7 +349,16 @@
       const tip = fake ? "Based on overstated mAh — the real £/10Ah is higher" : "";
       return `<td class="px-2 py-2 whitespace-nowrap"><span class="${cls}" title="${tip}">£${c.toFixed(2)}</span></td>`;
     },
-    wh: p => `<td class="px-2 py-2 whitespace-nowrap">${p.capacity_wh ? Math.round(p.capacity_wh).toLocaleString() + "Wh" : "—"}</td>`,
+    wh: p => {
+      if (!p.capacity_wh) return `<td class="px-2 py-2 whitespace-nowrap">—</td>`;
+      const h = p.honesty || {};
+      let tip = "";
+      if (h.wh_cap) {
+        tip = `Max plausible from weight: ~${Math.round(h.wh_cap).toLocaleString()}Wh`;
+        if (h.overstatement_pct) tip += ` — overstated by ~${h.overstatement_pct}%`;
+      }
+      return `<td class="px-2 py-2 whitespace-nowrap"${tip ? ` title="${esc(tip)}"` : ""}>${Math.round(p.capacity_wh).toLocaleString()}Wh</td>`;
+    },
     costwh: p => {
       if (p.cost_per_wh == null) return `<td class="px-2 py-2 whitespace-nowrap">—</td>`;
       const fake = (p.honesty_flags || []).includes("impossible_capacity");
@@ -349,12 +367,17 @@
       return `<td class="px-2 py-2 whitespace-nowrap"><span class="${cls}" title="${tip}">£${p.cost_per_wh.toFixed(2)}</span></td>`;
     },
     acw: p => `<td class="px-2 py-2 whitespace-nowrap">${p.ac_output_w ? p.ac_output_w + "W" : "—"}</td>`,
-    // Feature tags + the honesty flag bubbles (e.g. "impossible capacity", "unverified brand").
+    // Feature tags + compact honesty score + flag bubbles.
     features: p => {
       const f = honestyFlagBubbles(p);
       const delisted = p.delisted_at
         ? `<span class="badge bg-slate-700 text-amber-300" title="Delisted at ${p.delisted_at}">delisted</span> ` : "";
-      return `<td class="px-2 py-2">${delisted}${dealBadge(p)}${featureIcons(p)}${f ? " " + f : ""}</td>`;
+      const hs = honestyScore(p);
+      const hsCls = hs == null ? "" : hs >= 75 ? "text-emerald-400" : hs >= 50 ? "text-amber-400" : "text-red-400";
+      const hsBadge = hs != null
+        ? `<span class="text-[10px] ${hsCls} mr-1" title="Honesty score: ${hs.toFixed(0)}/100">H:${hs.toFixed(0)}</span>`
+        : "";
+      return `<td class="px-2 py-2">${delisted}${dealBadge(p)}${featureIcons(p)}${hsBadge}${f ? " " + f : ""}</td>`;
     },
     rating: p => {
       const stars = p.rating != null ? p.rating.toFixed(1) + "★" : "—";
@@ -363,6 +386,12 @@
     },
     value: p => { const v = valueToYou(p); return `<td class="px-2 py-2 whitespace-nowrap"><span title="${valueBreakdown(p)}">${v != null ? Math.round(v) : `<span class="text-slate-600">—</span>`}</span></td>`; },
     trend: p => `<td class="px-2 py-2 whitespace-nowrap">${sparkline(p)}</td>`,
+    // Watchlist capacity: mAh for power banks, Wh for power stations, — when unknown.
+    wl_cap: p => {
+      if (p.claimed_mah) return `<td class="px-2 py-2 whitespace-nowrap">${p.claimed_mah.toLocaleString()}mAh</td>`;
+      if (p.capacity_wh) return `<td class="px-2 py-2 whitespace-nowrap">${Math.round(p.capacity_wh).toLocaleString()}Wh</td>`;
+      return `<td class="px-2 py-2 whitespace-nowrap text-slate-600">—</td>`;
+    },
   };
   const HEAD = [["", null, "img"], ["Product", "title", "product"], ["Price", "price", "price"]];
   const TAIL = [["Features", null, "features"], ["Rating", "rating", "rating"],
@@ -370,10 +399,7 @@
   const COLS_BY_CAT = {
     power_bank: HEAD.concat([["mAh", "claimed_mah", "mah"], ["£/10Ah", "cost_per_mah", "cost10k"]], TAIL),
     power_station: HEAD.concat([["Wh", "capacity_wh", "wh"], ["£/Wh", "cost_per_wh", "costwh"], ["AC W", "ac_output_w", "acw"]], TAIL),
-    // Watchlist holds arbitrary user-chosen items — fewer columns, capacity
-    // varies per item so no fixed capacity column. Trend + avg-price-delta are
-    // the user's primary signal here.
-    watchlist: HEAD.concat([["Features", null, "features"], ["Rating", "rating", "rating"], ["Trend", null, "trend"]]),
+    watchlist: HEAD.concat([["Capacity", null, "wl_cap"], ["Features", null, "features"], ["Rating", "rating", "rating"], ["Trend", null, "trend"]]),
   };
   function cols() { return COLS_BY_CAT[state.category] || COLS_BY_CAT.power_bank; }
 
@@ -599,15 +625,19 @@
     const rows = products.filter(passesFilters);
     computeFactorRanges(rows); rows.sort(cmp);
     const cols2 = ["asin", "title", "brand", "category", "chemistry", "url", "price", "avg_price",
-      "claimed_mah", "capacity_wh", "cost_per_mah", "cost_per_wh", "ac_output_w", "rating",
-      "review_count", "honesty_score", "honesty_flags", "value_0_100", "price_delta"];
+      "all_time_low", "all_time_high", "fair_price", "price_delta",
+      "claimed_mah", "capacity_wh", "weight_g", "cost_per_mah", "cost_per_wh",
+      "pd_w", "usb_c", "usb_a", "ac_output_w", "rating",
+      "review_count", "honesty_score", "honesty_flags", "value_0_100"];
     const lines = [cols2.join(",")];
     rows.forEach(p => {
       const hs = honestyScore(p), vy = valueToYou(p);
       lines.push([p.asin, p.title, p.brand, p.category, p.chemistry, p.url, p.price, p.avg_price,
-        p.claimed_mah, p.capacity_wh, p.cost_per_mah, p.cost_per_wh, p.ac_output_w, p.rating,
+        p.all_time_low, p.all_time_high, p.fair_price, p.price_delta,
+        p.claimed_mah, p.capacity_wh, p.weight_g, p.cost_per_mah, p.cost_per_wh,
+        p.pd_w, p.usb_c, p.usb_a, p.ac_output_w, p.rating,
         p.review_count, hs != null ? hs.toFixed(1) : "", (p.honesty_flags || []).join("|"),
-        vy != null ? Math.round(vy) : "", p.price_delta].map(csvEscape).join(","));
+        vy != null ? Math.round(vy) : ""].map(csvEscape).join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
