@@ -161,6 +161,22 @@ def test_backfill_promotes_boolean_features():
     assert pb.solar is True
 
 
+def test_backfill_uses_title_when_specs_empty():
+    """If raw_specs bullets/details are empty but the title has parseable data,
+    backfill should still recover the field."""
+    s = _session()
+    s.add(models.Product(
+        asin="TBF1", title="LiFePO4 Power Bank 20000mAh", brand="NoName",
+        price=35, claimed_mah=None, chemistry=None,
+        raw_specs={"bullets": "", "details": ""},
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    p = s.get(models.Product, "TBF1")
+    assert p.claimed_mah == 20000, "mAh should be recovered from the title"
+    assert p.chemistry == "lifepo4", "chemistry should be recovered from the title"
+
+
 def test_capacity_wh_rederived_after_chemistry_backfill():
     """capacity_wh for power banks must use the backfilled chemistry, not the
     default Li-ion voltage. A LiFePO4 20000 mAh pack is 64 Wh, not 74 Wh."""

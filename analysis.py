@@ -451,7 +451,7 @@ def _backfill_from_raw_specs(products):
         specs = p.raw_specs
         if not specs:
             continue
-        blob = " ".join(filter(None, [specs.get("bullets", ""), specs.get("details", "")]))
+        blob = " ".join(filter(None, [p.title or "", specs.get("bullets", ""), specs.get("details", "")]))
         if not blob:
             continue
         if p.date_first_available is None:
