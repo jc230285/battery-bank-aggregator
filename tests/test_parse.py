@@ -45,6 +45,9 @@ def test_extract_watts_pd():
     assert mx == 65
     pd, mx = parse.extract_watts("Fast charging 20W PD and 18W QC")
     assert pd == 20
+    # "65W USB-C PD" — port label between wattage and PD keyword
+    pd2, _ = parse.extract_watts("65W USB-C PD fast charging")
+    assert pd2 == 65
 
 
 def test_extract_watts_decimal_and_va():

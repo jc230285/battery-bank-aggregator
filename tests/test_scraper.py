@@ -78,3 +78,37 @@ def test_new_first_ordering_key():
     cards = [{"asin": a} for a in ["a", "b", "c", "d"]]
     cards.sort(key=lambda c: c["asin"] in known)
     assert [c["asin"] for c in cards] == ["a", "c", "b", "d"]
+
+
+def test_parse_detail_html_extracts_core_fields():
+    """_parse_detail_html should populate price, title, mAh, weight, and chemistry
+    from a minimal but realistic Amazon product page structure."""
+    html = """
+    <html><head><title>Anker Power Bank</title></head><body>
+      <span id="productTitle">Anker 737 Power Bank 26800mAh</span>
+      <span id="bylineInfo">Brand: Anker</span>
+      <div id="corePriceDisplay_desktop_feature_div">
+        <span class="priceToPay"><span class="a-offscreen">£79.99</span></span>
+      </div>
+      <div id="availability"><span>In Stock</span></div>
+      <div id="acrPopover" title="4.6 out of 5 stars"></div>
+      <span id="acrCustomerReviewText">12,345 ratings</span>
+      <div id="feature-bullets">
+        <span>26800mAh Li-ion power bank</span>
+        <span>Weight: 635 grams</span>
+        <span>65W USB-C PD fast charging</span>
+      </div>
+      <div id="productDetails_techSpec_section_1">
+        <tr><td>Item Weight</td><td>635 g</td></tr>
+      </div>
+    </body></html>
+    """
+    result = scraper._parse_detail_html(html, "B0ANKER01")
+    assert result["title"] == "Anker 737 Power Bank 26800mAh"
+    assert result["price"] == 79.99
+    assert result["claimed_mah"] == 26800
+    assert result["chemistry"] == "li-ion"
+    assert result["pd_w"] == 65
+    assert result["in_stock"] is True
+    assert result["rating"] == 4.6
+    assert result["asin"] == "B0ANKER01"
