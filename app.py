@@ -86,7 +86,7 @@ def run_cycle(trigger="manual", full=False):
         # feature value) so value-to-you stays current — but throttle by time so a
         # fast card-only refresh burst doesn't trigger dozens of redundant passes.
         processed[0] += 1
-        if processed[0] % 8 == 0 and time.time() - last_analysis[0] > 10:
+        if processed[0] % 15 == 0 and time.time() - last_analysis[0] > 15:
             try:
                 analysis.run_analysis(session)
                 last_analysis[0] = time.time()
@@ -199,6 +199,8 @@ def _data_is_stale():
 def _product_dict(p):
     hist_prices = [h.price for h in p.history if h.price is not None]
     avg_price = round(sum(hist_prices) / len(hist_prices), 2) if hist_prices else None
+    all_time_low = round(min(hist_prices), 2) if hist_prices else None
+    all_time_high = round(max(hist_prices), 2) if hist_prices else None
     # Cap history sent to the browser at 60 entries — enough for a useful
     # sparkline and keeps the page-load payload sane for long-tracked products.
     recent = p.history[-60:]
@@ -223,6 +225,7 @@ def _product_dict(p):
         "first_seen": p.first_seen.isoformat() if p.first_seen else None,
         "last_seen": p.last_seen.isoformat() if p.last_seen else None,
         "delisted_at": p.delisted_at.isoformat() if p.delisted_at else None,
+        "all_time_low": all_time_low, "all_time_high": all_time_high,
         "history": [{"t": h.captured_at.isoformat(), "price": h.price}
                     for h in recent if h.price is not None],
     }

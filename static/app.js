@@ -280,9 +280,17 @@
     }
     return out.map(t => `<span class="badge bg-slate-700 text-slate-200">${esc(t)}</span>`).join(" ");
   }
+  const _CRITICAL_FLAGS = new Set(["impossible_capacity", "reviews_report_fake_capacity"]);
+  const _WARN_FLAGS = new Set(["too_cheap_per_capacity", "inconsistent_capacity_claims"]);
   function honestyFlagBubbles(p) {
-    return (p.honesty_flags || []).map(f =>
-      `<span class="badge bg-red-900 text-red-200" title="${f.replace(/_/g, " ")}">${f.replace(/_/g, " ")}</span>`).join(" ");
+    return (p.honesty_flags || []).map(f => {
+      const critical = _CRITICAL_FLAGS.has(f) || f.startsWith("brand_mimics_");
+      const warn = _WARN_FLAGS.has(f);
+      const cls = critical ? "bg-red-900 text-red-200"
+                : warn     ? "bg-amber-900 text-amber-200"
+                :            "bg-slate-700 text-slate-400";
+      return `<span class="badge ${cls}" title="${f.replace(/_/g, " ")}">${f.replace(/_/g, " ")}</span>`;
+    }).join(" ");
   }
   function valueBreakdown(p) {
     const w = curWeights();
@@ -297,7 +305,10 @@
     if (p.price != null && p.avg_price != null) cls = p.price < p.avg_price ? "text-emerald-400" : p.price > p.avg_price ? "text-red-400" : cls;
     const main = p.price != null ? `<span class="${cls}">£${p.price.toFixed(2)}</span>` : "—";
     const avg = p.avg_price != null ? `<div class="text-[10px] text-slate-500">avg £${p.avg_price.toFixed(2)}</div>` : "";
-    return `<td class="px-2 py-2 whitespace-nowrap">${main}${avg}</td>`;
+    const atl = (p.all_time_low != null && p.price != null && p.price <= p.all_time_low * 1.03)
+      ? `<span class="inline-block text-[9px] font-semibold bg-sky-900 text-sky-300 rounded px-1 ml-1" title="At or near all-time low (£${p.all_time_low.toFixed(2)})">ATL</span>`
+      : "";
+    return `<td class="px-2 py-2 whitespace-nowrap">${main}${atl}${avg}</td>`;
   }
   const CELL = {
     img: p => `<td class="px-2 py-2">${p.image_url ? `<img src="${safeUrl(p.image_url)}" class="w-10 h-10 object-contain">` : ""}</td>`,
@@ -565,7 +576,15 @@
     }
     if (lr) parts.push(`last run: ${lr.status}${lr.n_found != null ? " (" + lr.n_found + ")" : ""}`);
     if (lr && lr.notes) parts.push(lr.notes);
-    if (s.next_run) parts.push(`next: ${new Date(s.next_run).toLocaleString()}`);
+    const nr = s.next_runs || {};
+    if (nr.hourly_refresh) parts.push(`refresh: ${new Date(nr.hourly_refresh).toLocaleTimeString()}`);
+    if (nr.discovery) {
+      const d = new Date(nr.discovery);
+      const isToday = d.toDateString() === new Date().toDateString();
+      parts.push(`discovery: ${isToday ? d.toLocaleTimeString() : d.toLocaleDateString()}`);
+    } else if (!nr.hourly_refresh && s.next_run) {
+      parts.push(`next: ${new Date(s.next_run).toLocaleString()}`);
+    }
     document.getElementById("status").textContent = parts.join(" · ");
   }
 

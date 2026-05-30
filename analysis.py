@@ -115,7 +115,7 @@ def capacity_wh_of(p):
     if p.capacity_wh:
         return p.capacity_wh
     if p.claimed_mah:
-        return p.claimed_mah / 1000.0 * config.NOMINAL_CELL_VOLTAGE
+        return p.claimed_mah / 1000.0 * nominal_voltage(p.chemistry)
     return None
 
 
@@ -258,7 +258,9 @@ def price_outlier_subscores(products, metric_attr="cost_per_mah"):
         return {p.asin: (1.0, None) for p, _ in pairs}
     arr = np.array([v for _, v in pairs])
     med = float(np.median(arr))
-    mad = float(np.median(np.abs(arr - med))) or 1e-9
+    # Floor MAD at 2% of the median so a tight price cluster doesn't produce
+    # astronomically large z-scores from tiny absolute differences.
+    mad = max(float(np.median(np.abs(arr - med))), med * 0.02, 1e-9)
     for p, v in pairs:
         z = (v - med) / (1.4826 * mad)
         if z < -2.5:
@@ -408,7 +410,7 @@ def run_analysis(session):
     # Derive capacity (Wh) and cost metrics for everything.
     for p in products:
         if p.category != "power_station" and not p.capacity_wh and p.claimed_mah:
-            p.capacity_wh = round(p.claimed_mah / 1000.0 * config.NOMINAL_CELL_VOLTAGE, 1)
+            p.capacity_wh = round(p.claimed_mah / 1000.0 * nominal_voltage(p.chemistry), 1)
         p.cost_per_mah = cost_per_mah(p.price, p.claimed_mah)
         p.cost_per_wh = cost_per_wh(p.price, p.capacity_wh)
 
@@ -439,7 +441,7 @@ def run_analysis(session):
                 if category == "power_station":
                     p.honesty["wh_cap"] = round(plausible_wh)
                 else:
-                    p.honesty["mah_cap"] = round(plausible_wh / config.NOMINAL_CELL_VOLTAGE * 1000)
+                    p.honesty["mah_cap"] = round(plausible_wh / nominal_voltage(p.chemistry) * 1000)
                 if cap_wh > plausible_wh:
                     p.honesty["overstatement_pct"] = round(100 * (cap_wh - plausible_wh) / plausible_wh)
             p.honesty_flags = [f for f in (f_phys, f_price, f_rev, f_cons) if f]  # brand flag added below

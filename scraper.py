@@ -410,7 +410,7 @@ def _http_get(url, timeout=20):
     shell out. Raises HTTPError on 4xx/5xx, URLError on transport failure."""
     try:
         result = subprocess.run(
-            ["curl", "-sS", "--compressed",
+            ["curl", "-sS", "-L", "--compressed",
              "--max-time", str(timeout),
              "-A", config.USER_AGENT,
              "-H", "Accept-Language: en-GB,en;q=0.9",
@@ -458,8 +458,10 @@ def _parse_detail_html(html, asin):
     if BeautifulSoup is None:
         raise RuntimeError("beautifulsoup4 is required for HTTP refresh")
     soup = BeautifulSoup(html, "lxml")
-    # Captcha / interstitial detection
-    if soup.select_one("form[action*='validateCaptcha'], input#captchacharacters"):
+    # Captcha / interstitial detection — check both title and form elements.
+    page_title = (soup.title.string or "").lower() if soup.title else ""
+    if ("robot check" in page_title or "sorry" in page_title
+            or soup.select_one("form[action*='validateCaptcha'], input#captchacharacters")):
         raise BlockedError(f"blocked on product {asin}")
 
     title = _bs_text(soup, "#productTitle")

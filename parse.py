@@ -18,6 +18,7 @@ def asin_from_url(url):
 POSITIVE_KEYS = [
     "power bank", "powerbank", "battery bank", "portable charger",
     "power pack", "charging bank", "portable power bank",
+    "portable battery", "backup battery", "external battery",
 ]
 # Definitive accessory signals: the product itself IS a case/protector, or is
 # explicitly "for" another device. These win even if "power bank" appears
