@@ -261,13 +261,35 @@ def extract_chemistry(text):
     return None
 
 
+_WH_SKIP_PRECEDERS = (
+    "expandable", "expanded", "expand to", "expand it to", "expand up to",
+    "up to", "maximum", "max ", "increase to", "extend to", "with extra",
+    "with additional", "scalable to", "scales to",
+)
+
+
 def extract_wh(text):
-    """Energy capacity in Wh (handles kWh), else None. Returns the largest plausible."""
+    """Energy capacity in Wh (handles kWh), else None.
+
+    Filters out values describing the *expanded* maximum (e.g. '2016Wh
+    expandable to 20kWh' should be 2016, not 20000) by skipping numbers
+    preceded by phrases like 'expandable', 'up to', 'extend to'. Returns the
+    largest of the remaining plausible values."""
     if not text:
         return None
     t = text.lower().replace(",", "")
-    vals = [float(m.group(1)) * 1000 for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t)]
-    vals += [float(m.group(1)) for m in re.finditer(r"(\d+(?:\.\d+)?)\s*wh\b", t)]
+
+    def _skipped(start):
+        window = t[max(0, start - 32):start]
+        return any(k in window for k in _WH_SKIP_PRECEDERS)
+
+    vals = []
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t):
+        if not _skipped(m.start()):
+            vals.append(float(m.group(1)) * 1000)
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*wh\b", t):
+        if not _skipped(m.start()):
+            vals.append(float(m.group(1)))
     vals = [v for v in vals if 50 <= v <= 20000]
     return max(vals) if vals else None
 

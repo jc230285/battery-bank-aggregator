@@ -31,6 +31,16 @@ def test_extract_wh():
     assert parse.extract_wh("just 20000mAh, no Wh") is None
 
 
+def test_extract_wh_ignores_expanded_max():
+    # Real listing wording — base 2016 Wh, expanded 20 kWh; we want the base.
+    assert parse.extract_wh("2016Wh Expandable To 20kWh LFP Battery") == 2016
+    assert parse.extract_wh("1024Wh LFP, expand up to 5kWh with extra battery") == 1024
+    assert parse.extract_wh("Power station 768Wh, scalable to 3.84kWh") == 768
+    # When the only number is the expanded max, return None — avoids passing the
+    # inflated figure through when we don't actually know the base.
+    assert parse.extract_wh("Expandable up to 10kWh") is None
+
+
 def test_extract_ac_output_w():
     assert parse.extract_ac_output_w("Pure Sine Wave 1000W AC Output") == 1000
     assert parse.extract_ac_output_w("2000W surge, 1000W rated output") == 1000
