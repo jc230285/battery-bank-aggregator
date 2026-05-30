@@ -255,6 +255,14 @@
     _dealCutoff = ratios.length ? Math.min(-0.10, ratios[Math.floor(ratios.length * 0.15)])
                                 : -0.25;  // never badge merely-on-fair products
   }
+  function newBadge(p) {
+    const iso = p.date_first_available || p.first_seen;
+    if (!iso) return "";
+    const daysSince = (Date.now() - new Date(iso)) / 86400000;
+    if (daysSince > 60) return "";
+    const label = Math.round(daysSince) <= 1 ? "New today" : `New ${Math.round(daysSince)}d`;
+    return `<span class="badge bg-sky-800 text-sky-200" title="Listed ${esc(iso)}">🆕 ${label}</span> `;
+  }
   function dealBadge(p) {
     if (p.price == null || p.fair_price == null || p.price_delta == null) return "";
     if (p.fair_price <= 0) return "";
@@ -339,7 +347,22 @@
     const atl = (p.all_time_low != null && p.price != null && p.price <= p.all_time_low * 1.03)
       ? `<span class="inline-block text-[9px] font-semibold bg-sky-900 text-sky-300 rounded px-1 ml-1" title="At or near all-time low (£${p.all_time_low.toFixed(2)})">ATL</span>`
       : "";
-    return `<td class="px-2 py-2 whitespace-nowrap">${main}${atl}${avg}</td>`;
+    let fairHtml = "";
+    if (p.fair_price != null) {
+      const fc = p.feature_contrib || {};
+      const parts = Object.entries(fc)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `  ${k.replace(/_/g, " ")}: £${v.toFixed(2)}`);
+      const tip = parts.length
+        ? `Hedonic fair price: £${p.fair_price.toFixed(2)}\nFeature breakdown:\n${parts.join("\n")}`
+        : `Hedonic fair price: £${p.fair_price.toFixed(2)}`;
+      const fairCls = p.price != null && p.fair_price > 0
+        ? (p.price < p.fair_price * 0.9 ? "text-emerald-400" : p.price > p.fair_price * 1.1 ? "text-red-400" : "text-slate-400")
+        : "text-slate-400";
+      fairHtml = `<div class="text-[10px] ${fairCls} cursor-help" title="${esc(tip)}">fair £${p.fair_price.toFixed(2)}</div>`;
+    }
+    return `<td class="px-2 py-2 whitespace-nowrap">${main}${atl}${avg}${fairHtml}</td>`;
   }
   const CELL = {
     img: p => `<td class="px-2 py-2">${p.image_url ? `<img src="${safeUrl(p.image_url)}" class="w-10 h-10 object-contain">` : ""}</td>`,
@@ -395,10 +418,17 @@
         ? `<span class="badge bg-slate-700 text-amber-300" title="Delisted at ${p.delisted_at}">delisted</span> ` : "";
       const hs = honestyScore(p);
       const hsCls = hs == null ? "" : hs >= 75 ? "text-emerald-400" : hs >= 50 ? "text-amber-400" : "text-red-400";
-      const hsBadge = hs != null
-        ? `<span class="text-[10px] ${hsCls} mr-1" title="Honesty score: ${hs.toFixed(0)}/100">H:${hs.toFixed(0)}</span>`
-        : "";
-      return `<td class="px-2 py-2">${delisted}${dealBadge(p)}${featureIcons(p)}${hsBadge}${f ? " " + f : ""}</td>`;
+      let hsBadge = "";
+      if (hs != null) {
+        const h = p.honesty || {};
+        const subLines = HONESTY_KEYS
+          .filter(([k]) => h[k] != null)
+          .map(([k, lbl]) => `  ${lbl}: ${Math.round(h[k] * 100)}/100`);
+        const flagLines = (p.honesty_flags || []).map(f => `  ⚑ ${_flagLabel(f)}`);
+        const tip = [`Honesty score: ${hs.toFixed(0)}/100`].concat(subLines, flagLines).join("\n");
+        hsBadge = `<span class="text-[10px] ${hsCls} mr-1 cursor-help" title="${esc(tip)}">H:${hs.toFixed(0)}</span>`;
+      }
+      return `<td class="px-2 py-2">${delisted}${newBadge(p)}${dealBadge(p)}${featureIcons(p)}${hsBadge}${f ? " " + f : ""}</td>`;
     },
     rating: p => {
       const stars = p.rating != null ? p.rating.toFixed(1) + "★" : "—";

@@ -437,6 +437,8 @@ def _backfill_from_raw_specs(products):
         blob = " ".join(filter(None, [specs.get("bullets", ""), specs.get("details", "")]))
         if not blob:
             continue
+        if p.date_first_available is None:
+            p.date_first_available = parse.extract_date_first_available(blob)
         if p.chemistry is None:
             p.chemistry = parse.extract_chemistry(blob)
         if p.claimed_mah is None:
