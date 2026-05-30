@@ -485,6 +485,21 @@ def _backfill_from_raw_specs(products):
             p.usb_c = usb_c
         if p.ac_sockets is None:
             p.ac_sockets = parse.extract_ac_sockets(blob)
+        # Boolean features: promote False -> True when raw specs say True.
+        # We never set True -> False here; only the live scrape can demote.
+        feats = parse.detect_features(blob)
+        if not p.wireless and feats["wireless"]:
+            p.wireless = True
+        if not p.display and feats["display"]:
+            p.display = True
+        if not p.passthrough and feats["passthrough"]:
+            p.passthrough = True
+        if not p.solar and feats["solar"]:
+            p.solar = True
+        if not p.expandable and feats["expandable"]:
+            p.expandable = True
+        if not p.ups and feats["ups"]:
+            p.ups = True
 
 
 def run_analysis(session):

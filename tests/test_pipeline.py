@@ -140,6 +140,27 @@ def test_backfill_fills_ports_and_watts():
     assert ps.ac_sockets == 2
 
 
+def test_backfill_promotes_boolean_features():
+    """Boolean features that were False should be promoted to True when raw_specs say True."""
+    s = _session()
+    s.add(models.Product(
+        asin="BF1", title="Power Bank 20000mAh", brand="Anker", price=35,
+        claimed_mah=20000, weight_g=350,
+        wireless=False, display=False, passthrough=False, solar=False,
+        raw_specs={
+            "bullets": "Qi wireless charging, LCD display, pass-through charging, solar panel input",
+            "details": "",
+        },
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    pb = s.get(models.Product, "BF1")
+    assert pb.wireless is True
+    assert pb.display is True
+    assert pb.passthrough is True
+    assert pb.solar is True
+
+
 def test_capacity_wh_rederived_after_chemistry_backfill():
     """capacity_wh for power banks must use the backfilled chemistry, not the
     default Li-ion voltage. A LiFePO4 20000 mAh pack is 64 Wh, not 74 Wh."""
