@@ -109,6 +109,37 @@ def test_backfill_fills_mah_and_wh_from_raw_specs():
     assert ps.capacity_wh == 500
 
 
+def test_backfill_fills_ports_and_watts():
+    """Backfill should populate port counts, ac_sockets, pd_w, and max_w from raw_specs."""
+    s = _session()
+    s.add(models.Product(
+        asin="FF1", title="Power Bank 20000mAh", brand="Anker", price=35,
+        claimed_mah=20000, weight_g=350,
+        usb_a=None, usb_c=None, pd_w=None,
+        raw_specs={
+            "bullets": "2 USB-A and 1 USB-C ports, 22.5W PD output",
+            "details": "",
+        },
+    ))
+    s.add(models.Product(
+        asin="PS2", title="Power Station 500Wh", brand="Jackery", price=400,
+        category="power_station", capacity_wh=500,
+        ac_sockets=None,
+        raw_specs={
+            "bullets": "2 AC outlets, pure sine wave 1000W",
+            "details": "",
+        },
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    pb = s.get(models.Product, "FF1")
+    ps = s.get(models.Product, "PS2")
+    assert pb.usb_a == 2
+    assert pb.usb_c == 1
+    assert pb.pd_w == 22.5
+    assert ps.ac_sockets == 2
+
+
 def test_capacity_wh_rederived_after_chemistry_backfill():
     """capacity_wh for power banks must use the backfilled chemistry, not the
     default Li-ion voltage. A LiFePO4 20000 mAh pack is 64 Wh, not 74 Wh."""

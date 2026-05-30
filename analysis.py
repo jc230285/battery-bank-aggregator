@@ -452,8 +452,19 @@ def _backfill_from_raw_specs(products):
         if p.weight_g is None:
             p.weight_g = parse.extract_weight_g(blob)
         if p.pd_w is None:
-            pd_w, _ = parse.extract_watts(blob)
+            pd_w, max_w = parse.extract_watts(blob)
             p.pd_w = pd_w
+            if p.max_w is None and max_w is not None:
+                p.max_w = max_w
+        elif p.max_w is None:
+            _, max_w = parse.extract_watts(blob)
+            p.max_w = max_w
+        if p.usb_a is None and p.usb_c is None:
+            usb_a, usb_c = parse.extract_ports(blob)
+            p.usb_a = usb_a
+            p.usb_c = usb_c
+        if p.ac_sockets is None:
+            p.ac_sockets = parse.extract_ac_sockets(blob)
 
 
 def run_analysis(session):
