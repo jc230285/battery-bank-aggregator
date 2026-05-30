@@ -265,7 +265,6 @@ def review_velocity_flag(review_count, date_first_available):
     age_days = (datetime.date.today() - listed).days
     if age_days <= 0:
         return None
-    reviews_per_day = review_count / age_days
     if (age_days <= 90 and review_count > 2000) or (age_days <= 180 and review_count > 5000):
         return "suspicious_review_velocity"
     return None
