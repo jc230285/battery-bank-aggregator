@@ -70,6 +70,10 @@
     { key: "honesty", label: "Min honesty", type: "range",
       test: (p, v) => { v = parseFloat(v) || 0; if (!v) return true; const s = honestyScore(p); return s != null && s >= v; } },
     { key: "stock", label: "In stock only", type: "check", test: (p, v) => !v || p.in_stock },
+    // Delisted = absent from Amazon results for >REMOVE_AFTER_HOURS or 404 on
+    // refresh. Hidden by default so the live catalog doesn't drift; tick to
+    // include them (their price history is preserved either way).
+    { key: "showDelisted", label: "Show delisted", type: "check", test: (p, v) => v || !p.delisted_at },
   ];
   const FILTERS_BY_CAT = {
     power_bank: COMMON_FILTERS.concat([
@@ -312,7 +316,12 @@
     },
     acw: p => `<td class="px-2 py-2 whitespace-nowrap">${p.ac_output_w ? p.ac_output_w + "W" : "—"}</td>`,
     // Feature tags + the honesty flag bubbles (e.g. "impossible capacity", "unverified brand").
-    features: p => { const f = honestyFlagBubbles(p); return `<td class="px-2 py-2">${dealBadge(p)}${featureIcons(p)}${f ? " " + f : ""}</td>`; },
+    features: p => {
+      const f = honestyFlagBubbles(p);
+      const delisted = p.delisted_at
+        ? `<span class="badge bg-slate-700 text-amber-300" title="Delisted at ${p.delisted_at}">delisted</span> ` : "";
+      return `<td class="px-2 py-2">${delisted}${dealBadge(p)}${featureIcons(p)}${f ? " " + f : ""}</td>`;
+    },
     rating: p => {
       const stars = p.rating != null ? p.rating.toFixed(1) + "★" : "—";
       const cnt = Number.isFinite(p.review_count) ? `<div class="text-[10px] text-slate-500">${p.review_count.toLocaleString()} ratings</div>` : "";
@@ -434,7 +443,9 @@
     document.getElementById("empty").classList.toggle("hidden", rows.length > 0);
     document.getElementById("rows").innerHTML = rows.map(p => {
       const fake = (p.honesty_flags || []).includes("impossible_capacity");
-      const cls = "border-b border-slate-800 hover:bg-slate-800/40" + (fake ? " bg-red-950/40" : "");
+      const cls = "border-b border-slate-800 hover:bg-slate-800/40"
+        + (fake ? " bg-red-950/40" : "")
+        + (p.delisted_at ? " opacity-60" : "");
       return `<tr class="${cls}">${colDefs.map(([, , cellId]) => CELL[cellId](p)).join("")}</tr>`;
     }).join("");
   }

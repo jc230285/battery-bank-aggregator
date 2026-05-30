@@ -76,6 +76,11 @@ class Product(Base):
     raw_specs = Column(JSON)
     review_snippets = Column(JSON)
 
+    # Soft-delist: when a product hasn't been seen in any results for
+    # REMOVE_AFTER_HOURS we mark it delisted (rather than deleting) so price
+    # history survives. The hourly queue skips these. Set back to None if it
+    # ever reappears in a future discovery sweep.
+    delisted_at = Column(DateTime)
     cost_per_wh = Column(Float)
     # Derived (analysis pass)
     cost_per_mah = Column(Float)
@@ -139,6 +144,7 @@ def init_db():
         "cycle_life": "INTEGER",
         "expandable": "BOOLEAN",
         "ups": "BOOLEAN",
+        "delisted_at": "DATETIME",
     }
     with engine.begin() as conn:
         existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(products)")}

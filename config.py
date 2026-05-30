@@ -39,6 +39,10 @@ MAX_PAGES = _int("BBA_MAX_PAGES", 30)  # hard safety bound on pagination
 INTERVAL_HOURS = _int("BBA_INTERVAL_HOURS", 1)
 HOURLY_BATCH_SIZE = _int("BBA_HOURLY_BATCH_SIZE", 40)
 DISCOVERY_INTERVAL_HOURS = _int("BBA_DISCOVERY_INTERVAL_HOURS", 24)
+# After Amazon serves a CAPTCHA, back off for this many hours before any new
+# scrape attempt — each failed-attempt-during-rep-trouble worsens the IP's
+# standing, and the only thing that actually clears it is silence.
+CAPTCHA_BACKOFF_HOURS = _int("BBA_CAPTCHA_BACKOFF_HOURS", 6)
 # A product is treated as delisted (and removed) only after it has been absent
 # from results for this long — avoids churn-deleting items that merely drop out
 # of one run's shifting search results.

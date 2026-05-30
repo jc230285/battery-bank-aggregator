@@ -48,6 +48,9 @@ def _upsert(session, item):
         if field in item and item[field] is not None:
             setattr(p, field, item[field])
     p.last_seen = now
+    # If a previously-delisted product reappears, un-delist it.
+    if p.delisted_at is not None:
+        p.delisted_at = None
     session.add(PriceHistory(
         asin=p.asin, captured_at=now, price=item.get("price"),
         in_stock=item.get("in_stock", True)))
@@ -118,37 +121,43 @@ def run_cycle(trigger="manual", full=False):
             watchlist_asins=watchlist)
         _progress.update(phase="reconciling", done=len(items), total=len(items))
 
-        # Reconcile the catalog: always drop non-battery items; drop delisted ones
-        # only after they've been absent for REMOVE_AFTER_HOURS (not on a single
-        # miss, since Amazon's result order shifts run to run). Skip the delisting
-        # sweep on an unhealthy run so a blocked scrape can't wipe the catalog.
+        # Reconcile the catalog. Accessories (strong signal of mis-ingest) are
+        # still hard-deleted, but products that simply haven't appeared for a
+        # while are soft-delisted — kept in the DB for price history, excluded
+        # from the hourly queue, hidden from the UI by default. Skip the sweep
+        # entirely on an unhealthy run so a blocked scrape can't mass-delist
+        # the catalog. Products seen again in this run have their delisted_at
+        # cleared (handled in _upsert).
         now = utcnow()
         healthy = status != "failed" and len(items) >= 20
         cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
         removed = 0
+        delisted = 0
         for p in session.query(Product).all():
-            # Only delete definitive accessories (strong signal), never borderline
-            # items — they already passed the relevance gate at ingest.
-            drop = parse.is_accessory(p.title)
-            if healthy and p.last_seen and (now - p.last_seen) > cutoff:
-                drop = True  # absent from results long enough to be considered delisted
-            if drop:
+            if parse.is_accessory(p.title):
                 session.delete(p)
                 removed += 1
-        if removed:
+                continue
+            if (healthy and p.delisted_at is None and p.last_seen
+                    and (now - p.last_seen) > cutoff):
+                p.delisted_at = now
+                delisted += 1
+        if removed or delisted:
             session.commit()
-            log.info("removed %d products (non-battery or delisted >%dh)",
-                     removed, config.REMOVE_AFTER_HOURS)
+            log.info("discovery: removed %d accessories, soft-delisted %d stale (>%dh absent)",
+                     removed, delisted, config.REMOVE_AFTER_HOURS)
 
         analysis.run_analysis(session)  # finalize: price outliers + regression
         run.status = status
         run.n_found = len(items)
-        run.notes = (notes + (f" removed {removed};" if removed else "")).strip()
+        run.notes = (notes + (f" removed {removed}; delisted {delisted};"
+                              if (removed or delisted) else "")).strip()
         run.finished_at = utcnow()
         session.commit()
-        log.info("scrape cycle done (%s): %d items, %d removed, status=%s",
-                 trigger, len(items), removed, status)
-        return {"status": status, "n_found": len(items), "removed": removed, "notes": run.notes}
+        log.info("scrape cycle done (%s): %d items, %d removed, %d delisted, status=%s",
+                 trigger, len(items), removed, delisted, status)
+        return {"status": status, "n_found": len(items),
+                "removed": removed, "delisted": delisted, "notes": run.notes}
     except Exception as e:  # noqa: BLE001 - record failure, keep server alive
         log.exception("scrape cycle failed (%s)", trigger)
         if session is not None:
@@ -209,6 +218,8 @@ def _product_dict(p):
         "honesty_flags": p.honesty_flags or [], "fair_price": p.fair_price,
         "price_delta": p.price_delta, "feature_contrib": p.feature_contrib or {},
         "first_seen": p.first_seen.isoformat() if p.first_seen else None,
+        "last_seen": p.last_seen.isoformat() if p.last_seen else None,
+        "delisted_at": p.delisted_at.isoformat() if p.delisted_at else None,
         "history": [{"t": h.captured_at.isoformat(), "price": h.price}
                     for h in p.history if h.price is not None],
     }
@@ -280,13 +291,43 @@ def api_run():
     return jsonify({"started": True, "full": full})
 
 
+def _captcha_cooldown_until(session):
+    """Last 'partial' run note containing 'CAPTCHA' marks an IP-reputation
+    problem; we hold off any new scrapes for CAPTCHA_BACKOFF_HOURS after it,
+    because every additional bot-shaped request during that window worsens
+    the IP's standing without actually fetching anything."""
+    last = (session.query(ScrapeRun)
+            .filter(ScrapeRun.status.in_(("partial", "failed")))
+            .order_by(ScrapeRun.started_at.desc()).first())
+    if not last or not last.notes or "CAPTCHA" not in last.notes:
+        return None
+    if not last.finished_at:
+        return None
+    cool = last.finished_at + datetime.timedelta(hours=config.CAPTCHA_BACKOFF_HOURS)
+    return cool if cool > utcnow() else None
+
+
 def run_hourly_refresh(trigger="hourly"):
     """Hourly cadence: refresh the N oldest products by last_seen + all
     watchlist items via direct detail-page visits (no search pagination).
-    Runs a delisting sweep afterwards (now ~hourly instead of every 6 h)."""
+    Runs a delisting sweep afterwards (now ~hourly instead of every 6 h).
+
+    Honours a CAPTCHA backoff — after Amazon serves a challenge, we sit
+    quiet for CAPTCHA_BACKOFF_HOURS rather than re-triggering it."""
     if not _run_lock.acquire(blocking=False):
         log.info("hourly refresh skipped (%s): another run in progress", trigger)
         return {"skipped": True}
+    cooldown = None
+    cs = SessionLocal()
+    try:
+        cooldown = _captcha_cooldown_until(cs)
+    finally:
+        cs.close()
+    if cooldown is not None:
+        log.info("hourly refresh skipped (%s): CAPTCHA cooldown until %s",
+                 trigger, cooldown.isoformat())
+        _run_lock.release()
+        return {"skipped": True, "cooldown_until": cooldown.isoformat()}
     session = None
     run = None
     try:
@@ -297,7 +338,11 @@ def run_hourly_refresh(trigger="hourly"):
         session.add(run)
         session.commit()
 
+        # Queue = oldest live products (delisted ones are kept in the DB for
+        # price history but skipped here so we don't burn cycles checking dead
+        # listings). Watchlist items are always in the queue.
         oldest = (session.query(Product.asin)
+                  .filter(Product.delisted_at.is_(None))
                   .order_by(Product.last_seen.asc())
                   .limit(config.HOURLY_BATCH_SIZE).all())
         watchlist = (session.query(Product.asin)
@@ -311,40 +356,55 @@ def run_hourly_refresh(trigger="hourly"):
         def on_progress(phase, done, total):
             _progress.update(phase=phase, done=done, total=total)
 
+        def on_delisted(asin):
+            p = session.get(Product, asin)
+            if p and p.delisted_at is None:
+                p.delisted_at = utcnow()
+                session.commit()
+                log.info("hourly: %s returned 404 — marked delisted", asin)
+
         # HTTP + BS4: no browser fingerprint to detect, much cheaper than
         # Playwright. The Playwright path stays available as scraper.refresh_asins
         # for cases that need JS-rendered content.
         items, status, notes = scraper.refresh_asins_http(
-            asins, on_item=on_item, on_progress=on_progress)
+            asins, on_item=on_item, on_progress=on_progress, on_delisted=on_delisted)
         _progress.update(phase="reconciling", done=len(items), total=len(items))
 
-        # Same delisting sweep as the discovery cycle. With hourly cadence, a
-        # delisted product clears in <=REMOVE_AFTER_HOURS hours from the absent
-        # moment, not the next 6h-cycle moment.
+        # Soft-delist sweep: anything we touched-but-got-back-404 was already
+        # marked delisted by refresh_asins_http. Here we also catch the silent
+        # case — products absent from results for > REMOVE_AFTER_HOURS get a
+        # delisted_at stamp so the next hourly queue skips them. Real
+        # accessories still get hard-deleted (they should never have been in
+        # the catalog).
         now = utcnow()
         healthy = status != "failed"
         cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
         removed = 0
+        delisted = 0
         for p in session.query(Product).all():
-            drop = parse.is_accessory(p.title)
-            if healthy and p.last_seen and (now - p.last_seen) > cutoff:
-                drop = True
-            if drop:
+            if parse.is_accessory(p.title):
                 session.delete(p)
                 removed += 1
-        if removed:
+                continue
+            if (healthy and p.delisted_at is None and p.last_seen
+                    and (now - p.last_seen) > cutoff):
+                p.delisted_at = now
+                delisted += 1
+        if removed or delisted:
             session.commit()
-            log.info("hourly: removed %d products", removed)
+            log.info("hourly: removed %d accessories, soft-delisted %d stale", removed, delisted)
 
         analysis.run_analysis(session)
         run.status = status
         run.n_found = len(items)
-        run.notes = (notes + (f" removed {removed};" if removed else "")).strip()
+        run.notes = (notes + (f" removed {removed}; delisted {delisted};"
+                              if (removed or delisted) else "")).strip()
         run.finished_at = utcnow()
         session.commit()
-        log.info("hourly refresh done (%s): %d/%d items, removed %d, status=%s",
-                 trigger, len(items), len(asins), removed, status)
-        return {"status": status, "refreshed": len(items), "removed": removed}
+        log.info("hourly refresh done (%s): %d/%d items, removed %d, delisted %d, status=%s",
+                 trigger, len(items), len(asins), removed, delisted, status)
+        return {"status": status, "refreshed": len(items),
+                "removed": removed, "delisted": delisted}
     except Exception as e:  # noqa: BLE001
         log.exception("hourly refresh failed (%s)", trigger)
         if session is not None:

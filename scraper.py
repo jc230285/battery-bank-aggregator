@@ -543,9 +543,13 @@ def _parse_detail_html(html, asin):
     }
 
 
-def refresh_asins_http(asins, on_item=None, on_progress=None):
-    """Lightweight hourly refresh via urllib+BeautifulSoup. No browser, no
-    fingerprint. Returns (items, status, notes), same shape as refresh_asins."""
+def refresh_asins_http(asins, on_item=None, on_progress=None, on_delisted=None):
+    """Lightweight hourly refresh via curl+BeautifulSoup. No browser, no
+    fingerprint. Returns (items, status, notes).
+
+    Calls on_delisted(asin) for any ASIN that returned 404/410 — Amazon has
+    pulled the listing, mark it delisted immediately rather than waiting for
+    the absent-from-results staleness window."""
     asins = list(dict.fromkeys(a for a in (asins or []) if a))
     if not asins:
         return [], "ok", "no asins to refresh"
@@ -566,6 +570,11 @@ def refresh_asins_http(asins, on_item=None, on_progress=None):
         except HTTPError as e:
             if e.code in (404, 410):
                 notes += f"{asin} delisted (HTTP {e.code}); "
+                if on_delisted:
+                    try:
+                        on_delisted(asin)
+                    except Exception as ex:  # noqa: BLE001
+                        log.warning("on_delisted failed for %s: %s", asin, ex)
             else:
                 notes += f"{asin} HTTP {e.code}; "
             continue
