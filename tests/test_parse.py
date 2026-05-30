@@ -234,6 +234,8 @@ def test_clean_brand():
     assert parse.clean_brand("Visit the Baseus Direct Store") == "Baseus"
     assert parse.clean_brand("Baseus Official") == "Baseus"
     assert parse.clean_brand("EcoFlow Online") == "EcoFlow"
+    # Multiple trailing qualifiers ("UK Direct") must all be stripped.
+    assert parse.clean_brand("Visit the Anker UK Direct Store") == "Anker"
 
 
 def test_extract_wh_expandable_from():

@@ -555,8 +555,8 @@ def clean_brand(text):
     b = re.sub(r"^\s*(?:brand|name|manufacturer)[:\s]+", "", b, flags=re.I)
     b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
     b = re.sub(r"\s+store$", "", b, flags=re.I)
-    # Strip trailing Amazon store qualifiers that aren't part of the brand name.
-    b = re.sub(r"\s+" + _STORE_QUALIFIERS + r"\s*$", "", b, flags=re.I)
+    # Strip all trailing Amazon store qualifiers (may be several: "UK Direct Official").
+    b = re.sub(r"(?:\s+" + _STORE_QUALIFIERS + r")+\s*$", "", b, flags=re.I)
     # Strip corporate suffixes: "Jackery, Inc." -> "Jackery"
     b = re.sub(r",?\s*\b(?:inc|ltd|llc|co|corp|plc|gmbh|bv|ag|s\.a|s\.l|oy|ab)\b\.?\s*$", "", b, flags=re.I)
     # Strip trailing parenthetical qualifiers: "Anker (Official)" -> "Anker"
