@@ -370,6 +370,15 @@ def extract_wh(text):
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:whr?\b|watt[\s\-]?hours?)", t):
         if not _skipped(m.start(), m.end()):
             vals.append(float(m.group(1)))
+    # Infer Wh from V×Ah when no explicit Wh/kWh is stated: "48V 30Ah" → 1440 Wh.
+    # Only fires if no explicit energy figure was found; voltage ≥ 12V guards against
+    # USB/phone specs; ≥ 100Wh floor guards against small automotive accessories.
+    if not vals:
+        for m in re.finditer(r"(\d+(?:\.\d+)?)\s*v\s*[x×*]?\s*(\d+(?:\.\d+)?)\s*ah\b", t):
+            volt, ah = float(m.group(1)), float(m.group(2))
+            wh = volt * ah
+            if volt >= 12 and 100 <= wh <= 20000:
+                vals.append(wh)
     vals = [v for v in vals if 50 <= v <= 20000]
     return max(vals) if vals else None
 

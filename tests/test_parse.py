@@ -273,6 +273,16 @@ def test_extract_ac_output_w_spelled_out():
     assert parse.extract_ac_output_w("2000 watts surge, 1800 watts rated") == 1800
 
 
+def test_extract_wh_vah_inference():
+    # Power stations sometimes specify voltage + Ah instead of Wh directly.
+    assert parse.extract_wh("48V 30Ah LiFePO4 power station") == 1440
+    assert parse.extract_wh("24V 50Ah battery pack") == 1200
+    # Explicit Wh takes precedence when present.
+    assert parse.extract_wh("48V × 30Ah = 1440Wh") == 1440
+    # USB/phone voltages (5V) produce < 100Wh and are filtered out.
+    assert parse.extract_wh("5V 2Ah USB power bank") is None
+
+
 def test_extract_wh_expandable_from():
     # "Expandable from 2048Wh up to 20480Wh" — base capacity is 2048, not the max.
     assert parse.extract_wh("Expandable from 2048Wh up to 20480Wh") == 2048
