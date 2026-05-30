@@ -136,6 +136,22 @@ def test_clean_brand():
     assert parse.clean_brand(None) is None
 
 
+def test_clean_brand_rejects_seller_codes():
+    # Amazon falls back to a random-looking seller code for products with no
+    # registered brand. These should be rejected so the brand-reputation model
+    # doesn't aggregate them as a real vendor.
+    assert parse.clean_brand("HVSYVVSRL") is None     # 0 vowels, 9 chars
+    assert parse.clean_brand("HIJYMNZPQ") is None     # 1 vowel (I), 9 chars
+    assert parse.clean_brand("FNFDKDK") is None       # 0 vowels, 7 chars
+    # Real all-caps brand names must still pass.
+    assert parse.clean_brand("INIU") == "INIU"
+    assert parse.clean_brand("UGREEN") == "UGREEN"
+    assert parse.clean_brand("AUKEY") == "AUKEY"
+    assert parse.clean_brand("ANKER") == "ANKER"
+    # Mixed-case strings are not seller codes by definition.
+    assert parse.clean_brand("Brand: NoName") == "NoName"
+
+
 def test_asin_from_url():
     assert parse.asin_from_url("https://www.amazon.co.uk/dp/B0ABCD1234?th=1") == "B0ABCD1234"
     assert parse.asin_from_url("/gp/product/B07XYZ8901/") == "B07XYZ8901"

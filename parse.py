@@ -402,10 +402,27 @@ def extract_date_first_available(text):
     return None
 
 
+_VOWELS = set("AEIOUaeiou")
+
+
+def _looks_like_seller_code(s):
+    """True for the random-looking all-caps strings Amazon falls back to when a
+    product has no real brand (e.g. 'HVSYVVSRL', 'HIJYMNZPQ'). The rule:
+    >=6 alphabetic chars, fully uppercase, and at most one vowel — real brand
+    names have multiple vowels even when stylised as all-caps (INIU, UGREEN,
+    AUKEY, ANKER all pass)."""
+    if not s or len(s) < 6 or not s.isalpha() or not s.isupper():
+        return False
+    vowels = sum(1 for c in s if c in _VOWELS)
+    return vowels <= 1
+
+
 def clean_brand(text):
     """Normalise an Amazon byline into a bare brand name.
 
     Handles "Visit the X Store", "Brand: X", "by X", and a trailing "Store".
+    Returns None for byline values that look like Amazon seller codes rather
+    than real brand names — these otherwise pollute the brand reputation model.
     """
     if not text:
         return None
@@ -417,6 +434,8 @@ def clean_brand(text):
     b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
     b = re.sub(r"\s+store$", "", b, flags=re.I)
     b = b.strip(" :|-‎‏")
+    if _looks_like_seller_code(b):
+        return None
     return b or None
 
 
