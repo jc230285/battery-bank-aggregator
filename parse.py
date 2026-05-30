@@ -81,6 +81,13 @@ def extract_mah(text):
     vals = [v for v in vals if 500 <= v <= 500000]
     if vals:
         return max(vals)
+    # "20K mAh" / "10k mah" shorthand
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*k\s*m\s*a\s*h", t):
+        v = int(float(m.group(1)) * 1000)
+        if 500 <= v <= 500000:
+            vals.append(v)
+    if vals:
+        return max(vals)
     # Fallback: bare "Ah" (not preceded by 'm'), e.g. "40Ah" → 40000 mAh.
     # Negative lookbehind excludes the 'm' in 'mah'.
     for m in re.finditer(r"(?<!m)(?<!\d)(\d+(?:\.\d+)?)\s*ah\b", t):

@@ -13,6 +13,14 @@ def test_extract_mah_variants():
     assert parse.extract_mah("no capacity here") is None
 
 
+def test_extract_mah_k_suffix():
+    # "20K mAh" shorthand sometimes used in titles/bullets.
+    assert parse.extract_mah("20K mAh power bank") == 20000
+    assert parse.extract_mah("10.5k mAh portable charger") == 10500
+    # Standard mAh still wins when both present in same text.
+    assert parse.extract_mah("20000mAh (20K mAh)") == 20000
+
+
 def test_extract_mah_ah_fallback():
     # Some listings use bare Ah instead of mAh — should be converted ×1000.
     assert parse.extract_mah("40Ah power bank") == 40000
