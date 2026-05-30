@@ -127,6 +127,21 @@ def test_detect_features_qi2_and_level_display():
     assert parse.detect_features("charge indicator display and pass-through charging")["display"]
 
 
+def test_detect_features_extended_display_and_passthrough():
+    # LED indicator = display
+    assert parse.detect_features("20000mAh with LED indicator for charge level")["display"]
+    # OLED display = display
+    assert parse.detect_features("OLED display showing remaining battery %")["display"]
+    # charging indicator = display
+    assert parse.detect_features("charging indicator lets you see status at a glance")["display"]
+    # simultaneous charging = passthrough
+    assert parse.detect_features("supports simultaneous charging of device and bank")["passthrough"]
+    # charge through = passthrough
+    assert parse.detect_features("charge through while topping up your phone")["passthrough"]
+    # use while charging = passthrough
+    assert parse.detect_features("use while charging for uninterrupted power")["passthrough"]
+
+
 def test_price_and_rating():
     assert parse.parse_price("£19.99") == 19.99
     assert parse.parse_price("Now £1,299.00") == 1299.00

@@ -6,8 +6,14 @@ WIRELESS_KEYS = ["wireless charg", "qi charg", "qi-certified", "qi certified",
 DISPLAY_KEYS = ["lcd", "digital display", "display screen", "led display",
                 "smart display", "percentage display", "screen display",
                 "battery level display", "battery level indicator",
-                "charge indicator display"]
-PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough"]
+                "charge indicator display", "led indicator", "power indicator",
+                "oled display", "oled screen", "status indicator",
+                "charge level indicator", "remaining capacity indicator",
+                "power display", "charging indicator"]
+PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough",
+                    "simultaneous charging", "charge while charging",
+                    "charge through", "charge and be charged",
+                    "use while charging"]
 SOLAR_KEYS = ["solar", "photovoltaic", "mppt", "pv input", "pv charging"]
 
 
