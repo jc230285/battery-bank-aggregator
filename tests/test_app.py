@@ -186,6 +186,43 @@ def test_captcha_cooldown_until_when_recent_captcha():
             sess.close()
 
 
+def test_upsert_preserves_watchlist_category():
+    """Discovery scrapes that find a watchlist ASIN in normal results must not
+    overwrite its category with 'power_bank' / 'power_station'."""
+    with _isolated_db():
+        sess = models.SessionLocal()
+        try:
+            now = datetime.datetime.utcnow()
+            sess.add(models.Product(asin="B0WL", title="Power Bank 20000mAh",
+                                    category="watchlist", first_seen=now, last_seen=now))
+            sess.commit()
+            # Simulate a discovery upsert that assigns power_bank category.
+            app._upsert(sess, {"asin": "B0WL", "title": "Power Bank 20000mAh",
+                                "price": 25.0, "in_stock": True,
+                                "category": "power_bank"})
+            sess.commit()
+            assert sess.get(models.Product, "B0WL").category == "watchlist"
+        finally:
+            sess.close()
+
+
+def test_reconcile_catalog_skips_watchlist():
+    """Watchlist products must never be auto-deleted even if their title looks
+    like an accessory (user added it deliberately)."""
+    with _isolated_db():
+        sess = models.SessionLocal()
+        try:
+            now = datetime.datetime.utcnow()
+            sess.add(models.Product(
+                asin="B0CASE", category="watchlist", last_seen=now, first_seen=now,
+                title="Hard Travel Case for Anker Power Bank 40000mAh"))
+            sess.commit()
+            app._reconcile_catalog(sess, healthy=True)
+            assert sess.get(models.Product, "B0CASE") is not None
+        finally:
+            sess.close()
+
+
 def test_captcha_cooldown_not_cleared_by_subsequent_non_captcha_failure():
     """A non-CAPTCHA failure after a CAPTCHA run must not clear the cooldown."""
     with _isolated_db(BBA_CAPTCHA_BACKOFF_HOURS="6"):

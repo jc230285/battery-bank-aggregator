@@ -47,6 +47,10 @@ def _upsert(session, item):
         "raw_specs", "review_snippets", "listing_position",
     ):
         if field in item and item[field] is not None:
+            # Never overwrite a user-managed watchlist category with a search-result
+            # category — the ASIN may appear in normal results during discovery.
+            if field == "category" and p.category == "watchlist":
+                continue
             setattr(p, field, item[field])
     p.last_seen = now
     # If a previously-delisted product reappears, un-delist it.
@@ -67,6 +71,9 @@ def _reconcile_catalog(session, healthy):
     cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
     removed = delisted = 0
     for p in session.query(Product).all():
+        # Watchlist products are user-chosen — never auto-delete them.
+        if p.category == "watchlist":
+            continue
         if parse.is_accessory(p.title):
             session.delete(p)
             removed += 1
