@@ -358,15 +358,23 @@ def extract_solar_input_w(text):
 
 
 def extract_cycle_life(text):
-    """Rated charge cycles (e.g. '3000 cycles'), else None."""
+    """Rated charge cycles (e.g. '3000 cycles', '2000 recharges'), else None."""
     if not text:
         return None
     t = text.lower().replace(",", "")
-    m = re.search(r"(\d{3,5})\s*\+?\s*(?:charge\s*)?cycles?", t)
-    if m:
-        v = int(m.group(1))
-        if 100 <= v <= 20000:
-            return v
+    patterns = [
+        r"(\d{3,5})\s*\+?\s*(?:charge\s*)?cycles?",
+        r"(\d{3,5})\s*\+?\s*(?:full\s*)?recharges?",
+        r"(?:life\s*cycles?|cycle\s*life)[^\d]{0,20}(\d{3,5})",
+        r"(?:recharg\w*|charg\w*)\s+(\d{3,5})\s*\+?\s*times?",
+        r"(\d{3,5})\s*\+?\s*times?\s+(?:recharg|charg)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, t)
+        if m:
+            v = int(m.group(m.lastindex))
+            if 100 <= v <= 20000:
+                return v
     return None
 
 
