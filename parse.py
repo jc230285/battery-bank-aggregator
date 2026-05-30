@@ -142,15 +142,20 @@ def extract_weight_g(text):
     t = t.lower().replace(",", "")
 
     candidates = []
-    # Prefer "item weight" / "product weight" over "shipping weight" (shipping
-    # includes packaging and overstates the product weight).
-    m = re.search(r"(?:item|product)\s+weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+    # Prefer specific product-weight labels over gross/shipping weights.
+    # Priority: item/product/net weight > generic weight > gross/shipping weight.
+    m = re.search(r"(?:item|product|net)\s+weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
     if m:
         candidates.append(_to_grams(float(m.group(1)), m.group(2)))
     else:
-        m = re.search(r"weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+        m = re.search(r"(?<!gross\s)(?<!shipping\s)weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
         if m:
             candidates.append(_to_grams(float(m.group(1)), m.group(2)))
+        else:
+            # Last resort: gross or shipping weight (includes packaging)
+            m = re.search(r"(?:gross|shipping)\s+weight[^0-9]{0,15}(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
+            if m:
+                candidates.append(_to_grams(float(m.group(1)), m.group(2)))
     m = re.search(r"[;:]\s*(\d+(?:\.\d+)?)\s*" + _WEIGHT_UNIT + r"\b", t)
     if m:
         candidates.append(_to_grams(float(m.group(1)), m.group(2)))
@@ -529,15 +534,15 @@ def clean_brand(text):
     if not text:
         return None
     b = text.strip()
+    _STORE_QUALIFIERS = r"(?:official|uk\b|direct|online|exclusive|authoris[eo]d|shop)"
     m = re.search(r"visit the\s+(.+?)\s+store\b", b, re.I)
     if m:
         b = m.group(1)
-        # Strip trailing Amazon store qualifiers that aren't part of the brand name.
-        b = re.sub(r"\s+(?:official|uk|direct|online|exclusive|authoris[eo]d|shop)\s*$",
-                   "", b, flags=re.I).strip()
     b = re.sub(r"^\s*brand[:\s]+", "", b, flags=re.I)
     b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
     b = re.sub(r"\s+store$", "", b, flags=re.I)
+    # Strip trailing Amazon store qualifiers that aren't part of the brand name.
+    b = re.sub(r"\s+" + _STORE_QUALIFIERS + r"\s*$", "", b, flags=re.I)
     b = b.strip(" :|-‎‏")
     if _looks_like_seller_code(b):
         return None

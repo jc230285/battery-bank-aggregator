@@ -51,8 +51,12 @@ def test_extract_weight_item_over_shipping():
         "Shipping Weight: 550 g. Item Weight: 430 g") == 430
     assert parse.extract_weight_g(
         "Shipping Weight 600g, Product Weight 350g") == 350
-    # When only shipping weight is present, fall back to it.
+    # "Net Weight" should win over "Gross Weight".
+    assert parse.extract_weight_g(
+        "Gross Weight: 500g, Net Weight: 350g") == 350
+    # When only shipping/gross weight is present, fall back to it.
     assert parse.extract_weight_g("Shipping Weight: 430 g") == 430
+    assert parse.extract_weight_g("Gross Weight: 480g") == 480
 
 
 def test_extract_weight_amazon_formats():
@@ -212,6 +216,8 @@ def test_clean_brand():
     assert parse.clean_brand("Visit the UGREEN Official Store") == "UGREEN"
     assert parse.clean_brand("Visit the Anker UK Store") == "Anker"
     assert parse.clean_brand("Visit the Baseus Direct Store") == "Baseus"
+    assert parse.clean_brand("Baseus Official") == "Baseus"
+    assert parse.clean_brand("EcoFlow Online") == "EcoFlow"
 
 
 def test_brand_from_title():
