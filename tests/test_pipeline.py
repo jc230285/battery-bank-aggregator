@@ -86,3 +86,24 @@ def test_too_few_rows_no_model():
     s.commit()
     out = analysis.run_analysis(s)
     assert not out.get("power_bank")  # too few rows -> no fitted model ({} )
+
+
+def test_backfill_fills_mah_and_wh_from_raw_specs():
+    s = _session()
+    # Product stored without claimed_mah/capacity_wh but with raw_specs text.
+    s.add(models.Product(
+        asin="BF1", title="Power Bank", brand="Anker", price=30,
+        claimed_mah=None, capacity_wh=None,
+        raw_specs={"bullets": "20000mAh high capacity", "details": "Weight: 320g"},
+    ))
+    s.add(models.Product(
+        asin="BF2", title="Power Station", brand="Jackery", price=300,
+        category="power_station", claimed_mah=None, capacity_wh=None,
+        raw_specs={"bullets": "500Wh LiFePO4 battery", "details": ""},
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    pb = s.get(models.Product, "BF1")
+    ps = s.get(models.Product, "BF2")
+    assert pb.claimed_mah == 20000
+    assert ps.capacity_wh == 500

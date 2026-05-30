@@ -516,7 +516,7 @@ def _parse_detail_html(html, asin):
     pd_w, max_w = parse.extract_watts(blob)
     usb_a, usb_c = parse.extract_ports(blob)
     feats = parse.detect_features(blob)
-    spec_blob = details + " " + title
+    spec_blob = " ".join(filter(None, [details, bullets, title]))
 
     return {
         "asin": asin,
