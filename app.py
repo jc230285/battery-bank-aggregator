@@ -5,7 +5,7 @@ import threading
 import time
 import datetime
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, make_response
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -297,7 +297,17 @@ def index():
 def api_products():
     session = SessionLocal()
     try:
-        return jsonify([_product_dict(p) for p in _load_products(session)])
+        # Use the most-recent last_seen as a cheap Last-Modified fingerprint so
+        # the browser can skip parsing a large JSON payload when nothing changed.
+        latest = session.query(func.max(Product.last_seen)).scalar()
+        if latest:
+            lm = _iso_utc(latest)
+            if request.headers.get("If-Modified-Since") == lm:
+                return make_response("", 304)
+        data = jsonify([_product_dict(p) for p in _load_products(session)])
+        if latest:
+            data.headers["Last-Modified"] = lm
+        return data
     finally:
         session.close()
 

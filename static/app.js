@@ -2,6 +2,7 @@
   "use strict";
   const D = window.BBA_DATA || {};
   let products = D.products || [];
+  let _lastProductsModified = null;
 
   // Scraped strings are untrusted — escape before innerHTML; only allow http(s) URLs.
   function esc(v) {
@@ -692,9 +693,12 @@
         setTimeout(liveTick, 3000);
       } else {
         setRunning(false);
-        fetch("/api/products").then(r => r.json()).then(prods => {
-          products = prods; render();
-        }).catch(() => {});
+        const hdrs = _lastProductsModified ? { "If-Modified-Since": _lastProductsModified } : {};
+        fetch("/api/products", { headers: hdrs }).then(r => {
+          if (r.status === 304) return null;
+          _lastProductsModified = r.headers.get("Last-Modified") || _lastProductsModified;
+          return r.json();
+        }).then(prods => { if (prods) { products = prods; render(); } }).catch(() => {});
       }
     }).catch(() => setTimeout(liveTick, 5000));
   }
