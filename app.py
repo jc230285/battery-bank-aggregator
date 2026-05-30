@@ -58,6 +58,28 @@ def _upsert(session, item):
     return p
 
 
+def _reconcile_catalog(session, healthy):
+    """Delete accessory mis-ingests and soft-delist stale products.
+
+    Skipped entirely on unhealthy runs so a blocked scrape can't mass-delist
+    the catalog. Returns (removed, delisted) counts."""
+    now = utcnow()
+    cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
+    removed = delisted = 0
+    for p in session.query(Product).all():
+        if parse.is_accessory(p.title):
+            session.delete(p)
+            removed += 1
+            continue
+        if (healthy and p.delisted_at is None and p.last_seen
+                and (now - p.last_seen) > cutoff):
+            p.delisted_at = now
+            delisted += 1
+    if removed or delisted:
+        session.commit()
+    return removed, delisted
+
+
 def run_cycle(trigger="manual", full=False):
     """Scrape -> persist -> analyse. Guarded so runs never overlap.
 
@@ -123,29 +145,9 @@ def run_cycle(trigger="manual", full=False):
             watchlist_asins=watchlist)
         _progress.update(phase="reconciling", done=len(items), total=len(items))
 
-        # Reconcile the catalog. Accessories (strong signal of mis-ingest) are
-        # still hard-deleted, but products that simply haven't appeared for a
-        # while are soft-delisted — kept in the DB for price history, excluded
-        # from the hourly queue, hidden from the UI by default. Skip the sweep
-        # entirely on an unhealthy run so a blocked scrape can't mass-delist
-        # the catalog. Products seen again in this run have their delisted_at
-        # cleared (handled in _upsert).
-        now = utcnow()
         healthy = status != "failed" and len(items) >= 20
-        cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
-        removed = 0
-        delisted = 0
-        for p in session.query(Product).all():
-            if parse.is_accessory(p.title):
-                session.delete(p)
-                removed += 1
-                continue
-            if (healthy and p.delisted_at is None and p.last_seen
-                    and (now - p.last_seen) > cutoff):
-                p.delisted_at = now
-                delisted += 1
+        removed, delisted = _reconcile_catalog(session, healthy)
         if removed or delisted:
-            session.commit()
             log.info("discovery: removed %d accessories, soft-delisted %d stale (>%dh absent)",
                      removed, delisted, config.REMOVE_AFTER_HOURS)
 
@@ -400,28 +402,8 @@ def run_hourly_refresh(trigger="hourly"):
             asins, on_item=on_item, on_progress=on_progress, on_delisted=on_delisted)
         _progress.update(phase="reconciling", done=len(items), total=len(items))
 
-        # Soft-delist sweep: anything we touched-but-got-back-404 was already
-        # marked delisted by refresh_asins_http. Here we also catch the silent
-        # case — products absent from results for > REMOVE_AFTER_HOURS get a
-        # delisted_at stamp so the next hourly queue skips them. Real
-        # accessories still get hard-deleted (they should never have been in
-        # the catalog).
-        now = utcnow()
-        healthy = status != "failed"
-        cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
-        removed = 0
-        delisted = 0
-        for p in session.query(Product).all():
-            if parse.is_accessory(p.title):
-                session.delete(p)
-                removed += 1
-                continue
-            if (healthy and p.delisted_at is None and p.last_seen
-                    and (now - p.last_seen) > cutoff):
-                p.delisted_at = now
-                delisted += 1
+        removed, delisted = _reconcile_catalog(session, healthy=status != "failed")
         if removed or delisted:
-            session.commit()
             log.info("hourly: removed %d accessories, soft-delisted %d stale", removed, delisted)
 
         analysis.run_analysis(session)
