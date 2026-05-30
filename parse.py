@@ -351,8 +351,8 @@ def extract_solar_input_w(text):
     best = None
     for m in re.finditer(r"(\d{2,4})\s*w\b", t):
         v = int(m.group(1))
-        window = t[max(0, m.start() - 20):m.end() + 12]
-        if "solar" in window and 10 <= v <= 2000:
+        window = t[max(0, m.start() - 25):m.end() + 15]
+        if ("solar" in window or "mppt" in window) and 10 <= v <= 2000:
             best = max(best or 0, v)
     return best
 

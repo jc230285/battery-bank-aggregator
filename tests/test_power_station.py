@@ -56,6 +56,8 @@ def test_extract_ac_sockets():
 
 def test_extract_solar_input_and_cycles():
     assert parse.extract_solar_input_w("Solar input up to 200W via MPPT") == 200
+    assert parse.extract_solar_input_w("MPPT 400W max input") == 400
+    assert parse.extract_solar_input_w("supports MPPT charging, 300W") == 300
     assert parse.extract_solar_input_w("no solar support") is None
     assert parse.extract_cycle_life("3000+ charge cycles") == 3000
     assert parse.extract_cycle_life("rated 3,500 cycles") == 3500
