@@ -511,6 +511,11 @@ def run_analysis(session):
     # every pass; corrects any product that was scraped before a parser improvement.
     _backfill_from_raw_specs(products)
 
+    # Save seller-stated Wh before overriding, so self_consistency can compare
+    # the original listing claim against what the mAh implies.  After backfill
+    # this is the value extracted from raw_specs / title; None means unstated.
+    stated_wh = {p.asin: p.capacity_wh for p in products}
+
     # Derive capacity (Wh) and cost metrics for everything.
     # Power banks: always re-derive capacity_wh from claimed_mah + current chemistry
     # so backfilled chemistry (lifepo4 vs li-ion) produces the correct voltage factor.
@@ -540,7 +545,8 @@ def run_analysis(session):
             physics, f_phys = physics_subscore(cap_wh, p.weight_g, p.chemistry)
             reviews, f_rev = reviews_subscore(p.review_snippets)
             price_s, f_price = outliers.get(p.asin, (None, None))
-            cons, f_cons = self_consistency_subscore(p.claimed_mah, p.capacity_wh, p.chemistry)
+            cons, f_cons = self_consistency_subscore(
+                p.claimed_mah, stated_wh.get(p.asin), p.chemistry)
             p.honesty = {"physics": physics, "price": price_s, "brand": None,
                          "reviews": reviews, "consistency": cons}
             plausible_wh = max_plausible_wh(p.weight_g, p.chemistry)

@@ -161,6 +161,24 @@ def test_backfill_promotes_boolean_features():
     assert pb.solar is True
 
 
+def test_self_consistency_uses_stated_wh_not_derived():
+    """Self-consistency must compare the seller's stated Wh (from raw_specs) against
+    what claimed_mah implies — not the Wh we derive ourselves. If we compared against
+    our own derived value, the check is trivially satisfied and never flags."""
+    s = _session()
+    # 20000 mAh @ 3.7 V = 74 Wh; seller inflates Wh to 200 Wh.
+    s.add(models.Product(
+        asin="SC1", title="Power Bank 20000mAh 200Wh", brand="NoName",
+        price=30, claimed_mah=20000,
+        raw_specs={"bullets": "20000mAh 200Wh capacity", "details": ""},
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    p = s.get(models.Product, "SC1")
+    assert "inconsistent_capacity_claims" in (p.honesty_flags or []), (
+        "inflated Wh vs mAh must be flagged by self_consistency_subscore")
+
+
 def test_backfill_uses_title_when_specs_empty():
     """If raw_specs bullets/details are empty but the title has parseable data,
     backfill should still recover the field."""
