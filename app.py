@@ -7,6 +7,7 @@ import datetime
 
 from flask import Flask, jsonify, render_template, request
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import config
@@ -266,11 +267,18 @@ def _status(session):
     }
 
 
+def _load_products(session):
+    """Load all products with history in 2 queries (selectin) instead of N+1."""
+    return (session.query(Product)
+            .options(selectinload(Product.history))
+            .all())
+
+
 @app.route("/")
 def index():
     session = SessionLocal()
     try:
-        products = session.query(Product).all()
+        products = _load_products(session)
         data = {
             "products": [_product_dict(p) for p in products],
             "model": (session.get(Meta, "feature_model").value
@@ -287,7 +295,7 @@ def index():
 def api_products():
     session = SessionLocal()
     try:
-        return jsonify([_product_dict(p) for p in session.query(Product).all()])
+        return jsonify([_product_dict(p) for p in _load_products(session)])
     finally:
         session.close()
 
