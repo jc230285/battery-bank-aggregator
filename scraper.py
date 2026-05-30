@@ -59,11 +59,15 @@ def _is_blocked(page):
         title = (page.title() or "").lower()
     except Exception:
         title = ""
-    if "robot check" in title or "sorry" in title:
+    _blocked_titles = ("robot check", "sorry!", "service unavailable",
+                       "page not found", "something went wrong", "access denied")
+    if any(k in title for k in _blocked_titles):
         return True
     if page.locator("form[action*='validateCaptcha']").count() > 0:
         return True
     if page.locator("input#captchacharacters").count() > 0:
+        return True
+    if page.locator("img[src*='dogs-of-amazon']").count() > 0:
         return True
     return False
 
@@ -458,10 +462,13 @@ def _parse_detail_html(html, asin):
     if BeautifulSoup is None:
         raise RuntimeError("beautifulsoup4 is required for HTTP refresh")
     soup = BeautifulSoup(html, "lxml")
-    # Captcha / interstitial detection — check both title and form elements.
+    # Captcha / interstitial / error page detection.
     page_title = (soup.title.string or "").lower() if soup.title else ""
-    if ("robot check" in page_title or "sorry" in page_title
-            or soup.select_one("form[action*='validateCaptcha'], input#captchacharacters")):
+    _blocked_titles = ("robot check", "sorry!", "service unavailable",
+                       "page not found", "something went wrong", "access denied")
+    if (any(k in page_title for k in _blocked_titles)
+            or soup.select_one("form[action*='validateCaptcha'], input#captchacharacters")
+            or soup.select_one("img[src*='dogs-of-amazon']")):
         raise BlockedError(f"blocked on product {asin}")
 
     title = _bs_text(soup, "#productTitle")
