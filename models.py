@@ -25,6 +25,8 @@ def _sqlite_pragmas(dbapi_con, _record):
     cur = dbapi_con.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA busy_timeout=5000")
+    cur.execute("PRAGMA synchronous=NORMAL")  # safe with WAL; avoids fsync on every commit
+    cur.execute("PRAGMA cache_size=-8000")    # 8 MB page cache
     cur.close()
 
 

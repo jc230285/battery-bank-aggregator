@@ -66,6 +66,9 @@ STATE_DIR = os.environ.get("BBA_STATE_DIR", os.path.join(BASE_DIR, "state"))
 # Detail pages are practically static per ASIN (specs don't change); a long TTL
 # lets parser re-runs replay against cached HTML without re-fetching.
 CACHE_TTL_HOURS = _int("BBA_CACHE_TTL_HOURS", 24 * 14)
+# Price history rows older than this are pruned. 180 days (~4k rows per product/year
+# at hourly refresh) is enough for seasonal trend analysis.
+PRICE_HISTORY_KEEP_DAYS = _int("BBA_PRICE_HISTORY_KEEP_DAYS", 180)
 
 # Brand-anchored searches. Each cycle picks one brand per category (rotation
 # driven by the date) and adds its search URL to the configured SEARCHES. Over

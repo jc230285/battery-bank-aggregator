@@ -463,5 +463,13 @@ def run_analysis(session):
 
     _set_meta(session, "feature_model", models)
     _set_meta(session, "brand_reputation", reps_all)
+
+    # Prune old price history once per analysis pass. A single DELETE is cheap
+    # and prevents unbounded growth (~700 rows/product/year at hourly refresh).
+    import datetime as _dt
+    cutoff = _dt.datetime.utcnow() - _dt.timedelta(days=config.PRICE_HISTORY_KEEP_DAYS)
+    from models import PriceHistory as _PH
+    session.query(_PH).filter(_PH.captured_at < cutoff).delete(synchronize_session=False)
+
     session.commit()
     return models
