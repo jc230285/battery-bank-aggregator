@@ -315,6 +315,13 @@ def extract_ac_output_w(text):
         if any(k in window for k in ("ac", "output", "inverter", "sine", "rated",
                                      "continuous", "mains", "socket", "plug")):
             best = max(best or 0, v)
+    # Fallback for power-station titles/specs that lead with the rated wattage
+    # without an explicit "AC output" label — e.g. "Power Station, 1800W (Peak 2400W)".
+    if best is None and ("power station" in t or "power bank station" in t):
+        for m in re.finditer(r"(\d{3,4})\s*w\b", t):
+            v = int(m.group(1))
+            if 100 <= v <= 8000 and v not in surge:
+                best = max(best or 0, v)
     return best
 
 

@@ -199,3 +199,16 @@ def test_is_battery_bank():
     # unknown title but real capacity -> keep
     assert parse.is_battery_bank("", 10000)
     assert not parse.is_battery_bank("", None)
+
+
+def test_extract_ac_output_w_unlabelled_power_station():
+    # Wattage in title without "AC output" keyword — common in power station names.
+    assert parse.extract_ac_output_w(
+        "Anker SOLIX C1000 Portable Power Station, 1800W (Peak 2400W)") == 1800
+    assert parse.extract_ac_output_w(
+        "DJI Power 1000 V2 Portable Power Station, 2600W Stable Output") == 2600
+    # Explicit label still works.
+    assert parse.extract_ac_output_w(
+        "EcoFlow DELTA 2 Portable Power Station 1024Wh, 1800W AC Output") == 1800
+    # Non-station product must not get a spurious value.
+    assert parse.extract_ac_output_w("PowerBank 10000mAh USB-C") is None
