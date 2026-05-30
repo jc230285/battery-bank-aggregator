@@ -107,3 +107,23 @@ def test_backfill_fills_mah_and_wh_from_raw_specs():
     ps = s.get(models.Product, "BF2")
     assert pb.claimed_mah == 20000
     assert ps.capacity_wh == 500
+
+
+def test_capacity_wh_rederived_after_chemistry_backfill():
+    """capacity_wh for power banks must use the backfilled chemistry, not the
+    default Li-ion voltage. A LiFePO4 20000 mAh pack is 64 Wh, not 74 Wh."""
+    s = _session()
+    # Product stored with li-ion chemistry initially; raw_specs has lifepo4 hint.
+    s.add(models.Product(
+        asin="LFP1", title="LFP Power Bank 20000mAh", brand="NoName",
+        price=40, claimed_mah=20000, chemistry=None,
+        raw_specs={"bullets": "lithium iron phosphate cell 3.2V", "details": ""},
+    ))
+    s.commit()
+    analysis.run_analysis(s)
+    p = s.get(models.Product, "LFP1")
+    # Chemistry should be backfilled to lifepo4
+    assert p.chemistry == "lifepo4"
+    # Wh should be derived using 3.2V, not 3.7V
+    assert p.capacity_wh is not None
+    assert 63 < p.capacity_wh < 65   # 20000/1000 * 3.2 = 64 Wh

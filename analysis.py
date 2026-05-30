@@ -466,8 +466,11 @@ def run_analysis(session):
     _backfill_from_raw_specs(products)
 
     # Derive capacity (Wh) and cost metrics for everything.
+    # Power banks: always re-derive capacity_wh from claimed_mah + current chemistry
+    # so backfilled chemistry (lifepo4 vs li-ion) produces the correct voltage factor.
+    # Power stations store manufacturer-stated Wh directly; don't override it.
     for p in products:
-        if p.category != "power_station" and not p.capacity_wh and p.claimed_mah:
+        if p.category != "power_station" and p.claimed_mah:
             p.capacity_wh = round(p.claimed_mah / 1000.0 * nominal_voltage(p.chemistry), 1)
         p.cost_per_mah = cost_per_mah(p.price, p.claimed_mah)
         p.cost_per_wh = cost_per_wh(p.price, p.capacity_wh)
