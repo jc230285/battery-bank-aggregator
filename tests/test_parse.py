@@ -48,6 +48,12 @@ def test_extract_watts_pd():
     # "65W USB-C PD" — port label between wattage and PD keyword
     pd2, _ = parse.extract_watts("65W USB-C PD fast charging")
     assert pd2 == 65
+    # "100W GaN USB-C PD" — GaN + port label between wattage and PD
+    pd3, _ = parse.extract_watts("100W GaN USB-C PD charger")
+    assert pd3 == 100
+    # "PD3.1 140W" — PD version number before wattage
+    pd4, _ = parse.extract_watts("PD3.1 140W output")
+    assert pd4 == 140
 
 
 def test_extract_watts_decimal_and_va():

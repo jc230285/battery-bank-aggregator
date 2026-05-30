@@ -156,15 +156,16 @@ def extract_watts(text):
     max_w = max(nums) if nums else None
 
     pd_w = None
-    # Wattage before "PD" with optional port label: "20W PD", "65W USB-C PD".
+    # Wattage before "PD" with optional port/tech label: "20W PD", "65W USB-C PD",
+    # "100W GaN USB-C PD".
     for m in re.finditer(
-            r"(\d+(?:\.\d+)?)\s*w\s*(?:usb[\s\-]?c\s*)?(?:pd|power delivery)", t):
+            r"(\d+(?:\.\d+)?)\s*w\s*(?:(?:gan|usb[\s\-]?c|type[\s\-]?c)\s*)*(?:pd|power delivery)", t):
         v = float(m.group(1))
         if 1 <= v <= 300:
             pd_w = max(pd_w or 0, v)
-    # Wattage after "PD": "PD 20W", "Power Delivery: 65W", "PD charging 65W".
+    # Wattage after "PD": "PD 20W", "PD3.0 65W", "Power Delivery: 65W".
     for m in re.finditer(
-            r"(?:pd|power delivery)\s*(?:charging|output|input)?\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*w", t):
+            r"(?:pd|power delivery)(?:\d+(?:\.\d+)?)?\s*(?:charging|output|input)?\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*w", t):
         v = float(m.group(1))
         if 1 <= v <= 300:
             pd_w = max(pd_w or 0, v)
