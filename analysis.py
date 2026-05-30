@@ -402,10 +402,40 @@ def _analysis_cat(p):
     return "power_bank"
 
 
+def _backfill_from_raw_specs(products):
+    """Re-derive null structured fields from stored raw_specs text.
+
+    When the parser improves, existing products don't benefit until
+    re-scraped.  Running the current extractors against the cached
+    raw_specs text fills the gaps without needing an extra HTTP round-trip."""
+    for p in products:
+        specs = p.raw_specs
+        if not specs:
+            continue
+        blob = " ".join(filter(None, [specs.get("bullets", ""), specs.get("details", "")]))
+        if not blob:
+            continue
+        if p.ac_output_w is None:
+            p.ac_output_w = parse.extract_ac_output_w(blob)
+        if p.solar_input_w is None:
+            p.solar_input_w = parse.extract_solar_input_w(blob)
+        if p.cycle_life is None:
+            p.cycle_life = parse.extract_cycle_life(blob)
+        if p.weight_g is None:
+            p.weight_g = parse.extract_weight_g(blob)
+        if p.pd_w is None:
+            pd_w, _ = parse.extract_watts(blob)
+            p.pd_w = pd_w
+
+
 def run_analysis(session):
     """Recompute all derived fields, computing market signals (outliers, regression,
     brand reputation) within each category. Returns {category: model}."""
     products = session.query(Product).all()
+
+    # Backfill any null spec fields from the stored raw HTML text.  Cheap to run
+    # every pass; corrects any product that was scraped before a parser improvement.
+    _backfill_from_raw_specs(products)
 
     # Derive capacity (Wh) and cost metrics for everything.
     for p in products:
