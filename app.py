@@ -471,6 +471,17 @@ def _watchlist_scrape_one(asin):
                  asin, cooldown.isoformat())
         _run_lock.release()
         return
+    # Skip if already refreshed within the last 30 minutes (deduplicates rapid
+    # re-adds of the same ASIN without burning an extra HTTP round-trip).
+    fs = SessionLocal()
+    try:
+        p = fs.get(Product, asin)
+        if p and p.last_seen and (utcnow() - p.last_seen) < datetime.timedelta(minutes=30):
+            log.info("watchlist scrape skipped (%s): refreshed recently", asin)
+            _run_lock.release()
+            return
+    finally:
+        fs.close()
     sess = None
     try:
         sess = SessionLocal()
