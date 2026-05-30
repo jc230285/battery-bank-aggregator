@@ -8,7 +8,7 @@ DISPLAY_KEYS = ["lcd", "digital display", "display screen", "led display",
                 "battery level display", "battery level indicator",
                 "charge indicator display"]
 PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough"]
-SOLAR_KEYS = ["solar"]
+SOLAR_KEYS = ["solar", "photovoltaic", "mppt", "pv input", "pv charging"]
 
 
 def asin_from_url(url):
@@ -381,13 +381,14 @@ def extract_solar_input_w(text):
     if not text:
         return None
     t = text.lower()
-    if "solar" not in t and "mppt" not in t:
+    _solar_terms = ("solar", "mppt", "photovoltaic", "pv input")
+    if not any(k in t for k in _solar_terms):
         return None
     best = None
     for m in re.finditer(r"(\d{2,4})\s*w\b", t):
         v = int(m.group(1))
         window = t[max(0, m.start() - 25):m.end() + 15]
-        if ("solar" in window or "mppt" in window) and 10 <= v <= 2000:
+        if any(k in window for k in _solar_terms) and 10 <= v <= 2000:
             best = max(best or 0, v)
     return best
 

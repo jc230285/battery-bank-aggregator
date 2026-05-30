@@ -316,7 +316,7 @@ def _feature_vector(p, category):
             p.ac_sockets or 0,
             p.solar_input_w or 0,
             p.pd_w or 0,
-            p.cycle_life or 0,
+            (p.cycle_life or 0) / 100.0,   # cycle_hundreds
             1.0 if p.expandable else 0.0,
             1.0 if p.ups else 0.0,
             1.0 if brand_trusted(p.brand) else 0.0,
@@ -399,7 +399,7 @@ def feature_contributions(model, p, category):
             "ac_sockets": c["ac_sockets"] * (p.ac_sockets or 0),
             "solar_input_w": c["solar_input_w"] * (p.solar_input_w or 0),
             "pd_w": c["pd_w"] * (p.pd_w or 0),
-            "cycle_life": c["cycle_life"] * (p.cycle_life or 0),
+            "cycle_life": c["cycle_life"] * ((p.cycle_life or 0) / 100.0),
             "expandable": c["expandable"] if p.expandable else 0.0,
             "ups": c["ups"] if p.ups else 0.0,
             "brand_trust": brand_val,
