@@ -89,6 +89,12 @@ def test_extract_watts_pd():
     assert pd4 == 140
 
 
+def test_extract_watts_equals_separator():
+    # "5V=3A" style used by some listings (equals sign as separator)
+    pd, mx = parse.extract_watts("Output: 5V=3A, 9V=2A, 12V=1.5A")
+    assert mx == 18.0 and pd is None
+
+
 def test_extract_watts_decimal_and_va():
     # decimal wattage must not be truncated to "5W"
     assert parse.extract_watts("22.5W fast charging") == (None, 22.5)
@@ -202,6 +208,10 @@ def test_clean_brand():
     assert parse.clean_brand("  Visit the Goal Zero Store ") == "Goal Zero"
     assert parse.clean_brand("") is None
     assert parse.clean_brand(None) is None
+    # Trailing Amazon store qualifiers must be stripped.
+    assert parse.clean_brand("Visit the UGREEN Official Store") == "UGREEN"
+    assert parse.clean_brand("Visit the Anker UK Store") == "Anker"
+    assert parse.clean_brand("Visit the Baseus Direct Store") == "Baseus"
 
 
 def test_brand_from_title():

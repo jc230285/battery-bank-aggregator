@@ -183,8 +183,8 @@ def extract_watts(text):
         v = float(m.group(1))
         if 1 <= v <= 300:
             nums.append(v)
-    # Voltage/current pairs -> watts ("5v/3a", "9v 2a"); USB output only.
-    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*v\s*[/⎓·,]?\s*(\d+(?:\.\d+)?)\s*a\b", t):
+    # Voltage/current pairs -> watts ("5v/3a", "9v=2a", "9v 2a"); USB output only.
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*v\s*[/⎓·,=]?\s*(\d+(?:\.\d+)?)\s*a\b", t):
         volt, amp = float(m.group(1)), float(m.group(2))
         if 0 < volt <= 30 and 0 < amp <= 10:
             w = volt * amp
@@ -532,6 +532,9 @@ def clean_brand(text):
     m = re.search(r"visit the\s+(.+?)\s+store\b", b, re.I)
     if m:
         b = m.group(1)
+        # Strip trailing Amazon store qualifiers that aren't part of the brand name.
+        b = re.sub(r"\s+(?:official|uk|direct|online|exclusive|authoris[eo]d|shop)\s*$",
+                   "", b, flags=re.I).strip()
     b = re.sub(r"^\s*brand[:\s]+", "", b, flags=re.I)
     b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
     b = re.sub(r"\s+store$", "", b, flags=re.I)
