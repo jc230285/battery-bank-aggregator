@@ -244,6 +244,9 @@ def test_extract_wh_expandable_from():
     assert parse.extract_wh("1024Wh, expand to 3072Wh") == 1024
     # "up to X Wh" alone → skip all → None
     assert parse.extract_wh("up to 2000Wh capacity") is None
+    # Post-value "max"/"peak" also skipped — base capacity returned.
+    assert parse.extract_wh("2048Wh base, 6144Wh max") == 2048
+    assert parse.extract_wh("1000Wh rated, 2000Wh peak") == 1000
 
 
 def test_brand_from_title():

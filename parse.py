@@ -344,16 +344,20 @@ def extract_wh(text):
         return None
     t = text.lower().replace(",", "")
 
-    def _skipped(start):
-        window = t[max(0, start - 32):start]
-        return any(k in window for k in _WH_SKIP_PRECEDERS)
+    _POST_SKIP = ("max", "peak", "surge", "maximum")
+
+    def _skipped(start, end):
+        pre = t[max(0, start - 32):start]
+        post = t[end:end + 12]
+        return (any(k in pre for k in _WH_SKIP_PRECEDERS) or
+                any(re.search(r"\b" + k + r"\b", post) for k in _POST_SKIP))
 
     vals = []
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t):
-        if not _skipped(m.start()):
+        if not _skipped(m.start(), m.end()):
             vals.append(float(m.group(1)) * 1000)
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*whr?\b", t):
-        if not _skipped(m.start()):
+        if not _skipped(m.start(), m.end()):
             vals.append(float(m.group(1)))
     vals = [v for v in vals if 50 <= v <= 20000]
     return max(vals) if vals else None
