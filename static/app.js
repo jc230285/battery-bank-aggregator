@@ -625,13 +625,17 @@
     if (lr) parts.push(`last run: ${lr.status}${lr.n_found != null ? " (" + lr.n_found + ")" : ""}`);
     if (lr && lr.notes) parts.push(lr.notes);
     const nr = s.next_runs || {};
-    if (nr.hourly) parts.push(`refresh: ${new Date(nr.hourly).toLocaleTimeString()}`);
+    function _inMin(iso) {
+      const diff = Math.round((new Date(iso) - Date.now()) / 60000);
+      return diff <= 0 ? "now" : diff === 1 ? "in 1m" : `in ${diff}m`;
+    }
+    if (nr.hourly) parts.push(`refresh ${_inMin(nr.hourly)}`);
     if (nr.discovery) {
       const d = new Date(nr.discovery);
       const isToday = d.toDateString() === new Date().toDateString();
-      parts.push(`discovery: ${isToday ? d.toLocaleTimeString() : d.toLocaleDateString()}`);
+      parts.push(`discovery: ${isToday ? _inMin(nr.discovery) : d.toLocaleDateString()}`);
     } else if (!nr.hourly && s.next_run) {
-      parts.push(`next: ${new Date(s.next_run).toLocaleString()}`);
+      parts.push(`next ${_inMin(s.next_run)}`);
     }
     document.getElementById("status").textContent = parts.join(" · ");
   }

@@ -103,8 +103,11 @@ def run_cycle(trigger="manual", full=False):
             analysis.capacity_wh_of(p), p.weight_g, p.chemistry)
         brand, f_brand = analysis.brand_subscore(p.brand)
         rev, f_rev = analysis.reviews_subscore(p.review_snippets)
-        p.honesty = {"physics": phys, "price": None, "brand": brand, "reviews": rev}
-        p.honesty_flags = [f for f in (f_phys, f_brand, f_rev) if f]
+        cons, f_cons = analysis.self_consistency_subscore(
+            p.claimed_mah, p.capacity_wh, p.chemistry)
+        p.honesty = {"physics": phys, "price": None, "brand": brand,
+                     "reviews": rev, "consistency": cons}
+        p.honesty_flags = [f for f in (f_phys, f_brand, f_rev, f_cons) if f]
         session.commit()
         # Periodically recompute catalog-wide metrics (price outliers, regression,
         # feature value) so value-to-you stays current — but throttle by time so a
