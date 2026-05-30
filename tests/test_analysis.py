@@ -131,6 +131,12 @@ def test_reviews_subscore():
     assert flag == "reviews_report_fake_capacity"
     assert score < 1.0
     assert analysis.reviews_subscore(["great product, fast charging"])[0] == 1.0
+    # A single verbose review with many phrases should NOT flag (only 1 review affected).
+    score2, flag2 = analysis.reviews_subscore(
+        ["fake capacity, fake mah, doesn't hold charge, way less than advertised"])
+    assert flag2 is None
+    # No snippets -> no opinion.
+    assert analysis.reviews_subscore([])[0] is None
 
 
 def test_price_outlier_detects_cheap():

@@ -256,10 +256,15 @@ def brand_honesty(brand, reps):
 def reviews_subscore(snippets):
     if not snippets:
         return None, None
-    text = " ".join(snippets).lower()
-    hits = sum(text.count(p) for p in config.FAKE_PHRASES)
-    score = max(0.0, 1.0 - min(1.0, hits / 3.0))
-    flag = "reviews_report_fake_capacity" if hits >= 2 else None
+    # Count distinct reviews containing at least one fake-capacity phrase —
+    # a single verbose review shouldn't inflate the hit count.
+    affected = sum(
+        1 for s in snippets
+        if any(p in s.lower() for p in config.FAKE_PHRASES)
+    )
+    ratio = affected / len(snippets)
+    score = max(0.0, 1.0 - min(1.0, ratio * 2))
+    flag = "reviews_report_fake_capacity" if affected >= 2 else None
     return score, flag
 
 
