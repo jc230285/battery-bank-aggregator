@@ -211,6 +211,22 @@ def test_brand_mimicry_catches_typosquats_only():
     assert analysis.brand_mimicry_flag("ZorgBat") is None
 
 
+def test_hedonic_excludes_fake_capacity_reviews():
+    """Products flagged reviews_report_fake_capacity must be excluded from the
+    regression training set — their inflated mAh would drag the capacity coef down."""
+    good = [FakeProduct(asin=str(i), price=5.0 + i, claimed_mah=(10 + i) * 1000,
+                        rating=4.0) for i in range(14)]
+    # One product with fake-capacity reviews and an implausibly large claimed_mah.
+    fake = FakeProduct(asin="FAKE", price=10.0, claimed_mah=100000,
+                       honesty_flags=["reviews_report_fake_capacity"], rating=4.0)
+    model_with = analysis.hedonic_model(good, "power_bank")
+    model_excl = analysis.hedonic_model(good + [fake], "power_bank")
+    # Both models should give the same capacity coefficient — the fake is excluded.
+    assert model_with is not None and model_excl is not None
+    diff = abs(model_with["coef"]["capacity_kmah"] - model_excl["coef"]["capacity_kmah"])
+    assert diff < 0.1, f"fake capacity product contaminated the model (coef diff={diff:.3f})"
+
+
 def test_hedonic_and_value():
     # Construct a catalog where price = 5 + 1.0*kmah + 10*wireless (+ noise-free).
     products = []

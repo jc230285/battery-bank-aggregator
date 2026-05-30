@@ -348,9 +348,10 @@ def hedonic_model(products, category):
     model's coefficients toward the floor and producing nonsensical fair
     prices for the legitimate products."""
     names = feature_names(category)
+    _bad_flags = frozenset(("impossible_capacity", "reviews_report_fake_capacity"))
     rows, ys = [], []
     for p in products:
-        if "impossible_capacity" in (p.honesty_flags or []):
+        if _bad_flags & set(p.honesty_flags or []):
             continue
         if p.price and _has_capacity(p, category):
             rows.append(_feature_vector(p, category))
