@@ -59,7 +59,11 @@ def is_battery_bank(title, mah=None):
         return True
     if any(k in t for k in WEAK_EXCLUDE):
         return False
-    return mah is not None
+    # A capacity figure in the title is a strong implicit positive signal —
+    # standalone mAh numbers only appear on battery products.
+    if mah is not None or extract_mah(title) is not None:
+        return True
+    return False
 
 
 def extract_mah(text):
@@ -242,7 +246,12 @@ def is_power_station(title):
     t = (title or "").lower()
     if not t or any(k in t for k in STRONG_EXCLUDE):
         return False
-    return any(k in t for k in POWER_STATION_KEYS)
+    if any(k in t for k in POWER_STATION_KEYS):
+        return True
+    # High-Wh capacity in the title (≥200 Wh) implies a power station even
+    # without a keyword — power banks top out well below this range.
+    wh = extract_wh(title)
+    return wh is not None and wh >= 200
 
 
 def extract_chemistry(text):

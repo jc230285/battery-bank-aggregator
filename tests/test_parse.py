@@ -208,6 +208,20 @@ def test_is_battery_bank():
     # unknown title but real capacity -> keep
     assert parse.is_battery_bank("", 10000)
     assert not parse.is_battery_bank("", None)
+    # mAh in title alone (no explicit power-bank keyword) is a positive signal
+    assert parse.is_battery_bank("INIU 10000mAh Slim, 22.5W Fast Charging")
+    assert parse.is_battery_bank("20000mAh Li-ion Fast Charge Bank")
+
+
+def test_is_power_station_high_wh():
+    # ≥200Wh in title classifies as power station even without keyword phrase
+    assert parse.is_power_station("Jackery Explorer 500Wh")
+    assert parse.is_power_station("Anker SOLIX C1000 1056Wh")
+    # Sub-200Wh or no Wh -> not classified as power station by Wh alone
+    assert not parse.is_power_station("INIU 10000mAh Slim")
+    assert not parse.is_power_station("USB-C Cable 1m")
+    # Keyword phrase still works
+    assert parse.is_power_station("EcoFlow DELTA 2 Portable Power Station 1024Wh")
 
 
 def test_extract_ac_output_w_unlabelled_power_station():
