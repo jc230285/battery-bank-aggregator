@@ -335,19 +335,22 @@ def api_run():
 
 
 def _captcha_cooldown_until(session):
-    """Last 'partial' run note containing 'CAPTCHA' marks an IP-reputation
-    problem; we hold off any new scrapes for CAPTCHA_BACKOFF_HOURS after it,
-    because every additional bot-shaped request during that window worsens
-    the IP's standing without actually fetching anything."""
-    last = (session.query(ScrapeRun)
+    """Return the end of the CAPTCHA backoff window if still active, else None.
+
+    Scans recent partial/failed runs within the backoff window — not just the
+    single most recent one — so a subsequent non-CAPTCHA failure can't
+    prematurely clear a cooldown that is still in force."""
+    cutoff = utcnow() - datetime.timedelta(hours=config.CAPTCHA_BACKOFF_HOURS)
+    runs = (session.query(ScrapeRun)
             .filter(ScrapeRun.status.in_(("partial", "failed")))
-            .order_by(ScrapeRun.started_at.desc()).first())
-    if not last or not last.notes or "CAPTCHA" not in last.notes:
-        return None
-    if not last.finished_at:
-        return None
-    cool = last.finished_at + datetime.timedelta(hours=config.CAPTCHA_BACKOFF_HOURS)
-    return cool if cool > utcnow() else None
+            .filter(ScrapeRun.finished_at >= cutoff)
+            .order_by(ScrapeRun.finished_at.desc()).all())
+    for run in runs:
+        if run.notes and "CAPTCHA" in run.notes and run.finished_at:
+            cool = run.finished_at + datetime.timedelta(hours=config.CAPTCHA_BACKOFF_HOURS)
+            if cool > utcnow():
+                return cool
+    return None
 
 
 def run_hourly_refresh(trigger="hourly"):

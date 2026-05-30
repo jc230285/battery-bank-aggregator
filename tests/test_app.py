@@ -184,3 +184,24 @@ def test_captcha_cooldown_until_when_recent_captcha():
             assert app._captcha_cooldown_until(sess) is None
         finally:
             sess.close()
+
+
+def test_captcha_cooldown_not_cleared_by_subsequent_non_captcha_failure():
+    """A non-CAPTCHA failure after a CAPTCHA run must not clear the cooldown."""
+    with _isolated_db(BBA_CAPTCHA_BACKOFF_HOURS="6"):
+        sess = models.SessionLocal()
+        try:
+            captcha_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
+            fail_time = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
+            # CAPTCHA run first, then a later plain failure with no CAPTCHA note.
+            sess.add(models.ScrapeRun(
+                trigger="hourly", started_at=captcha_time, finished_at=captcha_time,
+                status="partial", n_found=0, notes="CAPTCHA at 0/40"))
+            sess.add(models.ScrapeRun(
+                trigger="hourly", started_at=fail_time, finished_at=fail_time,
+                status="failed", n_found=0, notes="ConnectionError: timeout"))
+            sess.commit()
+            cool = app._captcha_cooldown_until(sess)
+            assert cool is not None, "CAPTCHA cooldown should still be active"
+        finally:
+            sess.close()
