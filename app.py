@@ -233,6 +233,7 @@ def _status(session):
             if j.next_run_time:
                 next_runs[j.id] = j.next_run_time.isoformat()
     next_run = min(next_runs.values()) if next_runs else None
+    cooldown = _captcha_cooldown_until(session)
     return {
         "count": session.query(Product).count(),
         "last_run": ({"status": last.status, "trigger": last.trigger,
@@ -241,6 +242,7 @@ def _status(session):
                      if last else None),
         "next_run": next_run,
         "next_runs": next_runs,  # per-job (hourly, discovery)
+        "captcha_cooldown_until": cooldown.isoformat() if cooldown else None,
         "running": _run_lock.locked(),
         "progress": dict(_progress),
     }

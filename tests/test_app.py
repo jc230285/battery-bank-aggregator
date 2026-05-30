@@ -1,13 +1,44 @@
 """Tests for app-level serialization the UI depends on (no server/DB needed)."""
+import contextlib
 import os
 import sys
 import json
 import datetime
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import app
 import models
+
+
+@contextlib.contextmanager
+def _isolated_db(**env_overrides):
+    """Temp-file SQLite + reloaded modules so tests that mutate the DB don't
+    share state. (`:memory:` is unsafe across pool connections — separate DBs.)"""
+    saved_env = os.environ.copy()
+    fd, path = tempfile.mkstemp(suffix=".sqlite3")
+    os.close(fd)
+    try:
+        os.environ["BBA_DB"] = path
+        os.environ.update(env_overrides)
+        import importlib
+        import config
+        importlib.reload(config)
+        importlib.reload(models)
+        importlib.reload(app)
+        models.init_db()
+        yield
+    finally:
+        os.environ.clear(); os.environ.update(saved_env)
+        import importlib, config
+        importlib.reload(config)
+        importlib.reload(models)
+        importlib.reload(app)
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 def test_product_dict_serialization():
@@ -73,15 +104,8 @@ def test_product_dict_surfaces_delisted_at_and_last_seen():
 
 def test_upsert_clears_delisted_at_on_reappearance():
     # When a previously-delisted ASIN shows up again, the row is un-delisted
-    # so it rejoins the live queue. Uses a real in-memory SQLite session via
-    # models.init_db (which is what the running app uses).
-    os_environ = os.environ.copy()
-    try:
-        os.environ["BBA_DB"] = ":memory:"
-        import importlib
-        importlib.reload(models)
-        importlib.reload(app)
-        models.init_db()
+    # so it rejoins the live queue.
+    with _isolated_db():
         sess = models.SessionLocal()
         try:
             sess.add(models.Product(asin="B0BACK", title="Bank",
@@ -96,22 +120,10 @@ def test_upsert_clears_delisted_at_on_reappearance():
             assert sess.get(models.Product, "B0BACK").delisted_at is None
         finally:
             sess.close()
-    finally:
-        os.environ.clear(); os.environ.update(os_environ)
-        importlib.reload(models); importlib.reload(app)
 
 
 def test_captcha_cooldown_until_when_recent_captcha():
-    os_environ = os.environ.copy()
-    try:
-        os.environ["BBA_DB"] = ":memory:"
-        # Use a short backoff so the post-window expiry case is easy to assert.
-        os.environ["BBA_CAPTCHA_BACKOFF_HOURS"] = "6"
-        import importlib
-        import config; importlib.reload(config)
-        importlib.reload(models)
-        importlib.reload(app)
-        models.init_db()
+    with _isolated_db(BBA_CAPTCHA_BACKOFF_HOURS="6"):
         sess = models.SessionLocal()
         try:
             # Fresh CAPTCHA 1 minute ago -> we should be in cooldown.
@@ -123,7 +135,6 @@ def test_captcha_cooldown_until_when_recent_captcha():
             sess.commit()
             cool = app._captcha_cooldown_until(sess)
             assert cool is not None
-            # Should be roughly 6h ahead of the failed run.
             assert (cool - recent).total_seconds() == 6 * 3600
             # A clean ok run should clear the cooldown.
             sess.query(models.ScrapeRun).delete()
@@ -142,7 +153,3 @@ def test_captcha_cooldown_until_when_recent_captcha():
             assert app._captcha_cooldown_until(sess) is None
         finally:
             sess.close()
-    finally:
-        os.environ.clear(); os.environ.update(os_environ)
-        import importlib, config; importlib.reload(config)
-        importlib.reload(models); importlib.reload(app)

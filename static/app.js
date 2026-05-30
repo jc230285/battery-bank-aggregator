@@ -537,6 +537,10 @@
       const pr = s.progress;
       parts.push(pr.total ? `⏳ ${pr.phase} ${pr.done}/${pr.total}` : (pr.done ? `⏳ ${pr.phase} (${pr.done} found)` : `⏳ ${pr.phase}`));
     } else if (s.running) parts.push("scrape running…");
+    if (s.captcha_cooldown_until) {
+      const t = new Date(s.captcha_cooldown_until);
+      parts.push(`⏸ CAPTCHA cooldown until ${t.toLocaleTimeString()}`);
+    }
     if (lr) parts.push(`last run: ${lr.status}${lr.n_found != null ? " (" + lr.n_found + ")" : ""}`);
     if (lr && lr.notes) parts.push(lr.notes);
     if (s.next_run) parts.push(`next: ${new Date(s.next_run).toLocaleString()}`);
