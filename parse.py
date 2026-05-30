@@ -452,6 +452,9 @@ def extract_date_first_available(text):
     m = re.search(r"([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})", window)  # May 12, 2023
     if m and m.group(1).lower() in _MONTHS:
         return f"{int(m.group(3)):04d}-{_MONTHS[m.group(1).lower()]:02d}-{int(m.group(2)):02d}"
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", window)  # 2023-05-12 ISO
+    if m:
+        return m.group(0)
     return None
 
 

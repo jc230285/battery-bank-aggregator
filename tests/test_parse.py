@@ -154,6 +154,8 @@ def test_extract_date_first_available():
         "Date First Available: May 12, 2023") == "2023-05-12"
     assert parse.extract_date_first_available(
         "... Date first listed on Amazon 3 January 2024 ...") == "2024-01-03"
+    assert parse.extract_date_first_available(
+        "Date First Available: 2023-05-12") == "2023-05-12"
     assert parse.extract_date_first_available("no such field here") is None
     assert parse.extract_date_first_available("") is None
 
