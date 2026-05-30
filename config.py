@@ -118,6 +118,8 @@ TRUSTED_BRANDS = [
     "Sharge", "Shargeek", "BioLite", "Jackery", "Poweradd", "Omnicharge",
     "BLUETTI", "Renogy", "Growatt", "Allpowers", "Pecron", "EF ECOFLOW", "DJI Power",
     "VTOMAN", "Fossibot", "Oukitel",
+    "Energizer", "Duracell", "Cygnett", "Native Union", "Mcdodo",
+    "Varta", "GP Batteries", "Halo", "RavPower", "Powerology",
 ]
 
 # Review phrases that suggest overstated / fake capacity.
@@ -134,6 +136,9 @@ FAKE_PHRASES = [
     "rubbish capacity", "terrible capacity", "useless capacity",
     "not what it claims", "completely false", "utter rubbish",
     "wouldn't even charge", "couldn't even charge",
+    "false advertising", "completely fake", "not 10000", "not 40000",
+    "not 50000", "not 60000", "quarter the capacity", "third of the capacity",
+    "totally fake", "blatant lie", "utter scam",
 ]
 
 # LiFePO4 cells sit at ~3.2 V nominal vs Li-ion ~3.7 V; this matters for the

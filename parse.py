@@ -355,7 +355,7 @@ def extract_wh(text):
                 any(re.search(r"\b" + k + r"\b", post) for k in _POST_SKIP))
 
     vals = []
-    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t):
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:kwh|kilo[\s\-]?watt[\s\-]?hours?)", t):
         if not _skipped(m.start(), m.end()):
             vals.append(float(m.group(1)) * 1000)
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:whr?\b|watt[\s\-]?hours?)", t):

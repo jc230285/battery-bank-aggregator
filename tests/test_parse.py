@@ -243,6 +243,9 @@ def test_extract_wh_spelled_out():
     assert parse.extract_wh("1000 watt hour capacity") == 1000
     assert parse.extract_wh("500 watt-hours") == 500
     assert parse.extract_wh("2000 watthours") == 2000
+    # "kilowatt-hour(s)" spelled out.
+    assert parse.extract_wh("2 kilowatt-hour battery") == 2000
+    assert parse.extract_wh("1.5 kilowatt hours") == 1500
 
 
 def test_extract_ac_output_w_spelled_out():
