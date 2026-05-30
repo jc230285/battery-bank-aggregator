@@ -102,6 +102,19 @@ def test_product_dict_surfaces_delisted_at_and_last_seen():
     assert app._product_dict(live)["delisted_at"] is None
 
 
+def test_product_dict_timestamps_are_marked_utc():
+    # utcnow() returns naive datetimes; without an explicit 'Z' the browser
+    # parses them as local time and times are silently off by the TZ offset.
+    t = datetime.datetime(2026, 5, 29, 12, 34, 56)
+    p = models.Product(asin="B0TZ", first_seen=t, last_seen=t, delisted_at=t)
+    p.history = [models.PriceHistory(price=10.0, captured_at=t)]
+    d = app._product_dict(p)
+    assert d["first_seen"].endswith("Z")
+    assert d["last_seen"].endswith("Z")
+    assert d["delisted_at"].endswith("Z")
+    assert d["history"][0]["t"].endswith("Z")
+
+
 def test_upsert_clears_delisted_at_on_reappearance():
     # When a previously-delisted ASIN shows up again, the row is un-delisted
     # so it rejoins the live queue.

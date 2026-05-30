@@ -197,6 +197,17 @@ def _data_is_stale():
         session.close()
 
 
+def _iso_utc(dt):
+    """Serialize a naive UTC datetime with an explicit 'Z' suffix.
+
+    Why: utcnow() returns naive datetimes, so isoformat() emits no offset and
+    browsers parse those as *local* time — silently off by the TZ offset.
+    Marking them UTC keeps `new Date(...)` correct everywhere."""
+    if dt is None:
+        return None
+    return dt.isoformat() + ("" if dt.tzinfo else "Z")
+
+
 def _product_dict(p):
     hist_prices = [h.price for h in p.history if h.price is not None]
     avg_price = round(sum(hist_prices) / len(hist_prices), 2) if hist_prices else None
@@ -223,11 +234,11 @@ def _product_dict(p):
         "honesty": p.honesty or {},
         "honesty_flags": p.honesty_flags or [], "fair_price": p.fair_price,
         "price_delta": p.price_delta, "feature_contrib": p.feature_contrib or {},
-        "first_seen": p.first_seen.isoformat() if p.first_seen else None,
-        "last_seen": p.last_seen.isoformat() if p.last_seen else None,
-        "delisted_at": p.delisted_at.isoformat() if p.delisted_at else None,
+        "first_seen": _iso_utc(p.first_seen),
+        "last_seen": _iso_utc(p.last_seen),
+        "delisted_at": _iso_utc(p.delisted_at),
         "all_time_low": all_time_low, "all_time_high": all_time_high,
-        "history": [{"t": h.captured_at.isoformat(), "price": h.price}
+        "history": [{"t": _iso_utc(h.captured_at), "price": h.price}
                     for h in recent if h.price is not None],
     }
 
@@ -245,11 +256,11 @@ def _status(session):
         "count": session.query(Product).count(),
         "last_run": ({"status": last.status, "trigger": last.trigger,
                       "n_found": last.n_found, "notes": last.notes,
-                      "finished_at": last.finished_at.isoformat() if last.finished_at else None}
+                      "finished_at": _iso_utc(last.finished_at)}
                      if last else None),
         "next_run": next_run,
         "next_runs": next_runs,  # per-job (hourly, discovery)
-        "captcha_cooldown_until": cooldown.isoformat() if cooldown else None,
+        "captcha_cooldown_until": _iso_utc(cooldown),
         "running": _run_lock.locked(),
         "progress": dict(_progress),
     }

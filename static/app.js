@@ -604,12 +604,12 @@
     if (lr) parts.push(`last run: ${lr.status}${lr.n_found != null ? " (" + lr.n_found + ")" : ""}`);
     if (lr && lr.notes) parts.push(lr.notes);
     const nr = s.next_runs || {};
-    if (nr.hourly_refresh) parts.push(`refresh: ${new Date(nr.hourly_refresh).toLocaleTimeString()}`);
+    if (nr.hourly) parts.push(`refresh: ${new Date(nr.hourly).toLocaleTimeString()}`);
     if (nr.discovery) {
       const d = new Date(nr.discovery);
       const isToday = d.toDateString() === new Date().toDateString();
       parts.push(`discovery: ${isToday ? d.toLocaleTimeString() : d.toLocaleDateString()}`);
-    } else if (!nr.hourly_refresh && s.next_run) {
+    } else if (!nr.hourly && s.next_run) {
       parts.push(`next: ${new Date(s.next_run).toLocaleString()}`);
     }
     document.getElementById("status").textContent = parts.join(" · ");
