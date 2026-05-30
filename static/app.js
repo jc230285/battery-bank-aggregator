@@ -613,7 +613,10 @@
   }
   function renderStatus() {
     const s = D.status || {}, lr = s.last_run;
-    const parts = [`${products.length} products`];
+    const live = products.filter(p => !p.delisted_at).length;
+    const total = products.length;
+    const countStr = live < total ? `${live} live / ${total} total` : `${total} products`;
+    const parts = [countStr];
     if (s.running && s.progress && s.progress.phase !== "idle") {
       const pr = s.progress;
       parts.push(pr.total ? `⏳ ${pr.phase} ${pr.done}/${pr.total}` : (pr.done ? `⏳ ${pr.phase} (${pr.done} found)` : `⏳ ${pr.phase}`));
