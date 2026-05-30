@@ -295,7 +295,8 @@
     return out.map(t => `<span class="badge bg-slate-700 text-slate-200">${esc(t)}</span>`).join(" ");
   }
   const _CRITICAL_FLAGS = new Set(["impossible_capacity", "reviews_report_fake_capacity"]);
-  const _WARN_FLAGS = new Set(["too_cheap_per_capacity", "inconsistent_capacity_claims"]);
+  const _WARN_FLAGS = new Set(["too_cheap_per_capacity", "inconsistent_capacity_claims",
+                               "unverified_brand", "unknown_brand", "brand_low_reputation"]);
   const _FLAG_LABELS = {
     impossible_capacity:          "Capacity overstated",
     reviews_report_fake_capacity: "Reviewers report fake capacity",

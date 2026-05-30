@@ -431,6 +431,10 @@ def _backfill_from_raw_specs(products):
             continue
         if p.chemistry is None:
             p.chemistry = parse.extract_chemistry(blob)
+        if p.claimed_mah is None:
+            p.claimed_mah = parse.extract_mah(blob)
+        if p.capacity_wh is None:
+            p.capacity_wh = parse.extract_wh(blob)
         if p.ac_output_w is None:
             p.ac_output_w = parse.extract_ac_output_w(blob)
         if p.solar_input_w is None:
