@@ -303,10 +303,17 @@ def _has_capacity(p, category):
 
 def hedonic_model(products, category):
     """Non-negative hedonic price model for one category. Returns
-    {intercept, coef:{name:beta}, fallback} or None if too few rows."""
+    {intercept, coef:{name:beta}, fallback} or None if too few rows.
+
+    Products previously flagged 'impossible_capacity' are excluded — their
+    overstated mAh/Wh makes 'capacity' look artificially cheap, dragging the
+    model's coefficients toward the floor and producing nonsensical fair
+    prices for the legitimate products."""
     names = feature_names(category)
     rows, ys = [], []
     for p in products:
+        if "impossible_capacity" in (p.honesty_flags or []):
+            continue
         if p.price and _has_capacity(p, category):
             rows.append(_feature_vector(p, category))
             ys.append(p.price)

@@ -216,11 +216,12 @@ def _product_dict(p):
 
 def _status(session):
     last = _last_run(session)
-    next_run = None
+    next_runs = {}
     if scheduler.running:
-        jobs = scheduler.get_jobs()
-        if jobs and jobs[0].next_run_time:
-            next_run = jobs[0].next_run_time.isoformat()
+        for j in scheduler.get_jobs():
+            if j.next_run_time:
+                next_runs[j.id] = j.next_run_time.isoformat()
+    next_run = min(next_runs.values()) if next_runs else None
     return {
         "count": session.query(Product).count(),
         "last_run": ({"status": last.status, "trigger": last.trigger,
@@ -228,6 +229,7 @@ def _status(session):
                       "finished_at": last.finished_at.isoformat() if last.finished_at else None}
                      if last else None),
         "next_run": next_run,
+        "next_runs": next_runs,  # per-job (hourly, discovery)
         "running": _run_lock.locked(),
         "progress": dict(_progress),
     }
@@ -276,6 +278,89 @@ def api_run():
     threading.Thread(target=run_cycle, kwargs={"trigger": "manual", "full": full},
                      daemon=True).start()
     return jsonify({"started": True, "full": full})
+
+
+def run_hourly_refresh(trigger="hourly"):
+    """Hourly cadence: refresh the N oldest products by last_seen + all
+    watchlist items via direct detail-page visits (no search pagination).
+    Runs a delisting sweep afterwards (now ~hourly instead of every 6 h)."""
+    if not _run_lock.acquire(blocking=False):
+        log.info("hourly refresh skipped (%s): another run in progress", trigger)
+        return {"skipped": True}
+    session = None
+    run = None
+    try:
+        log.info("hourly refresh starting (%s)", trigger)
+        _progress.update(phase="starting", done=0, total=config.HOURLY_BATCH_SIZE)
+        session = SessionLocal()
+        run = ScrapeRun(trigger=trigger, started_at=utcnow(), status="running")
+        session.add(run)
+        session.commit()
+
+        oldest = (session.query(Product.asin)
+                  .order_by(Product.last_seen.asc())
+                  .limit(config.HOURLY_BATCH_SIZE).all())
+        watchlist = (session.query(Product.asin)
+                     .filter(Product.category == "watchlist").all())
+        asins = list({a for (a,) in oldest} | {a for (a,) in watchlist})
+
+        def on_item(item):
+            _upsert(session, item)
+            session.commit()
+
+        def on_progress(phase, done, total):
+            _progress.update(phase=phase, done=done, total=total)
+
+        items, status, notes = scraper.refresh_asins(
+            asins, on_item=on_item, on_progress=on_progress)
+        _progress.update(phase="reconciling", done=len(items), total=len(items))
+
+        # Same delisting sweep as the discovery cycle. With hourly cadence, a
+        # delisted product clears in <=REMOVE_AFTER_HOURS hours from the absent
+        # moment, not the next 6h-cycle moment.
+        now = utcnow()
+        healthy = status != "failed"
+        cutoff = datetime.timedelta(hours=config.REMOVE_AFTER_HOURS)
+        removed = 0
+        for p in session.query(Product).all():
+            drop = parse.is_accessory(p.title)
+            if healthy and p.last_seen and (now - p.last_seen) > cutoff:
+                drop = True
+            if drop:
+                session.delete(p)
+                removed += 1
+        if removed:
+            session.commit()
+            log.info("hourly: removed %d products", removed)
+
+        analysis.run_analysis(session)
+        run.status = status
+        run.n_found = len(items)
+        run.notes = (notes + (f" removed {removed};" if removed else "")).strip()
+        run.finished_at = utcnow()
+        session.commit()
+        log.info("hourly refresh done (%s): %d/%d items, removed %d, status=%s",
+                 trigger, len(items), len(asins), removed, status)
+        return {"status": status, "refreshed": len(items), "removed": removed}
+    except Exception as e:  # noqa: BLE001
+        log.exception("hourly refresh failed (%s)", trigger)
+        if session is not None:
+            try:
+                session.rollback()
+                if run is not None:
+                    run.status = "failed"
+                    run.notes = f"{type(e).__name__}: {e}"
+                    run.finished_at = utcnow()
+                    session.add(run)
+                    session.commit()
+            except Exception:  # noqa: BLE001
+                log.exception("failed to record hourly failure")
+        return {"status": "failed", "error": str(e)}
+    finally:
+        _progress.update(phase="idle", done=0, total=0)
+        if session is not None:
+            session.close()
+        _run_lock.release()
 
 
 def _watchlist_scrape_one(asin):
@@ -386,20 +471,29 @@ def _clear_orphan_runs():
 def main():
     init_db()
     _clear_orphan_runs()
-    # If data is missing or older than the interval, run immediately; else first
-    # run is one interval out. Then it repeats every INTERVAL_HOURS.
+    # Two cadences:
+    #   - hourly refresh of the oldest N products + all watchlist items
+    #     (direct detail pages, no search pagination)
+    #   - daily discovery sweep across the configured searches to find new ASINs
+    # If we've never run a discovery, fire one immediately; otherwise the
+    # hourly job starts the rotation and discovery waits its full interval.
+    now = datetime.datetime.now()
     stale = _data_is_stale()
-    first_run = datetime.datetime.now()
-    if not stale:
-        first_run += datetime.timedelta(hours=config.INTERVAL_HOURS)
+    discovery_first = now if stale else now + datetime.timedelta(hours=config.DISCOVERY_INTERVAL_HOURS)
+    hourly_first = now + datetime.timedelta(minutes=5 if stale else 0)
     scheduler.add_job(
-        run_cycle, "interval", hours=config.INTERVAL_HOURS,
-        kwargs={"trigger": "schedule"}, id="scrape", max_instances=1,
-        coalesce=True, next_run_time=first_run,
+        run_hourly_refresh, "interval", hours=config.INTERVAL_HOURS,
+        kwargs={"trigger": "hourly"}, id="hourly", max_instances=1,
+        coalesce=True, next_run_time=hourly_first,
+    )
+    scheduler.add_job(
+        run_cycle, "interval", hours=config.DISCOVERY_INTERVAL_HOURS,
+        kwargs={"trigger": "discovery"}, id="discovery", max_instances=1,
+        coalesce=True, next_run_time=discovery_first,
     )
     scheduler.start()
-    log.info("serving on http://%s:%d (first scrape: %s)",
-             config.HOST, config.PORT, "now" if stale else first_run.isoformat())
+    log.info("serving on http://%s:%d (discovery first: %s, hourly first: %s)",
+             config.HOST, config.PORT, discovery_first.isoformat(), hourly_first.isoformat())
     app.run(host=config.HOST, port=config.PORT, debug=False,
             use_reloader=False, threaded=True)
 

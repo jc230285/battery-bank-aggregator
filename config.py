@@ -30,7 +30,15 @@ SEARCHES = [
 CATEGORIES = ["power_bank", "power_station"]
 TOP_N = _int("BBA_TOP_N", 0)  # 0 = unlimited: scrape until blocked or no more results
 MAX_PAGES = _int("BBA_MAX_PAGES", 30)  # hard safety bound on pagination
-INTERVAL_HOURS = _int("BBA_INTERVAL_HOURS", 6)
+# Two-cadence scrape:
+#   - Hourly: refresh the N oldest products by last_seen via direct detail pages
+#     (no search pagination). Keeps prices fresh on a rolling window, small per-
+#     run Amazon-load so a single CAPTCHA doesn't trash much work.
+#   - Discovery (once a day): full search pagination across the configured queries
+#     to find new ASINs. Heavy but rare.
+INTERVAL_HOURS = _int("BBA_INTERVAL_HOURS", 1)
+HOURLY_BATCH_SIZE = _int("BBA_HOURLY_BATCH_SIZE", 40)
+DISCOVERY_INTERVAL_HOURS = _int("BBA_DISCOVERY_INTERVAL_HOURS", 24)
 # A product is treated as delisted (and removed) only after it has been absent
 # from results for this long — avoids churn-deleting items that merely drop out
 # of one run's shifting search results.

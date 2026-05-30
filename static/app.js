@@ -294,9 +294,22 @@
     },
     price: priceCell,
     mah: p => `<td class="px-2 py-2">${p.claimed_mah ? p.claimed_mah.toLocaleString() : "—"}</td>`,
-    cost10k: p => { const c = costPer10k(p); return `<td class="px-2 py-2 whitespace-nowrap">${c != null ? "£" + c.toFixed(2) : "—"}</td>`; },
+    cost10k: p => {
+      const c = costPer10k(p);
+      if (c == null) return `<td class="px-2 py-2 whitespace-nowrap">—</td>`;
+      const fake = (p.honesty_flags || []).includes("impossible_capacity");
+      const cls = fake ? "line-through text-slate-500" : "";
+      const tip = fake ? "Based on overstated mAh — the real £/10Ah is higher" : "";
+      return `<td class="px-2 py-2 whitespace-nowrap"><span class="${cls}" title="${tip}">£${c.toFixed(2)}</span></td>`;
+    },
     wh: p => `<td class="px-2 py-2 whitespace-nowrap">${p.capacity_wh ? Math.round(p.capacity_wh).toLocaleString() + "Wh" : "—"}</td>`,
-    costwh: p => `<td class="px-2 py-2 whitespace-nowrap">${p.cost_per_wh != null ? "£" + p.cost_per_wh.toFixed(2) : "—"}</td>`,
+    costwh: p => {
+      if (p.cost_per_wh == null) return `<td class="px-2 py-2 whitespace-nowrap">—</td>`;
+      const fake = (p.honesty_flags || []).includes("impossible_capacity");
+      const cls = fake ? "line-through text-slate-500" : "";
+      const tip = fake ? "Based on overstated Wh — the real £/Wh is higher" : "";
+      return `<td class="px-2 py-2 whitespace-nowrap"><span class="${cls}" title="${tip}">£${p.cost_per_wh.toFixed(2)}</span></td>`;
+    },
     acw: p => `<td class="px-2 py-2 whitespace-nowrap">${p.ac_output_w ? p.ac_output_w + "W" : "—"}</td>`,
     // Feature tags + the honesty flag bubbles (e.g. "impossible capacity", "unverified brand").
     features: p => { const f = honestyFlagBubbles(p); return `<td class="px-2 py-2">${dealBadge(p)}${featureIcons(p)}${f ? " " + f : ""}</td>`; },

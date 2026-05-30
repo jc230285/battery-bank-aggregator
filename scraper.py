@@ -356,6 +356,94 @@ def _card_only_item(c):
     }
 
 
+def _open_browser_context(pw):
+    """Browser+context+page with persistent storage_state and stealth applied.
+    Shared by the full discovery scrape and the lightweight hourly refresh."""
+    browser = pw.chromium.launch(headless=config.HEADLESS)
+    ctx_kwargs = dict(
+        locale=config.LOCALE, user_agent=config.USER_AGENT,
+        viewport={"width": 1366, "height": 900},
+    )
+    if os.path.exists(STORAGE_STATE_PATH):
+        ctx_kwargs["storage_state"] = STORAGE_STATE_PATH
+    ctx = browser.new_context(**ctx_kwargs)
+    page = ctx.new_page()
+    if stealth_sync is not None:
+        try:
+            stealth_sync(page)
+        except Exception as e:  # noqa: BLE001
+            log.warning("stealth patches failed: %s", e)
+    return browser, ctx, page
+
+
+def _save_storage_state(ctx):
+    try:
+        os.makedirs(os.path.dirname(STORAGE_STATE_PATH), exist_ok=True)
+        ctx.storage_state(path=STORAGE_STATE_PATH)
+    except Exception as e:  # noqa: BLE001
+        log.warning("storage_state save failed: %s", e)
+
+
+def refresh_asins(asins, on_item=None, on_progress=None):
+    """Lightweight hourly refresh: direct detail-page visits for an explicit
+    list of ASINs. No search pagination. Returns (items, status, notes).
+
+    Used both for the hourly oldest-N refresh and for a one-shot watchlist add.
+    A CAPTCHA mid-run sets status=partial and breaks; whatever was collected so
+    far is kept."""
+    asins = list(dict.fromkeys(a for a in (asins or []) if a))  # dedupe, preserve order
+    if not asins:
+        return [], "ok", "no asins to refresh"
+    items = []
+    notes = ""
+    status = "ok"
+    t0 = time.time()
+    cache.reset_stats()
+
+    def progress(phase, done, total):
+        if on_progress:
+            on_progress(phase, done, total)
+
+    progress("launching browser", 0, len(asins))
+    with sync_playwright() as pw:
+        browser, ctx, page = _open_browser_context(pw)
+        try:
+            for i, asin in enumerate(asins):
+                progress("refreshing", i, len(asins))
+                _sleep()
+                try:
+                    detail = _scrape_detail(page, asin)
+                except BlockedError:
+                    status = "partial"
+                    notes += f"CAPTCHA at {i}/{len(asins)}; "
+                    break
+                except Exception as e:  # noqa: BLE001 - keep going on per-product failures
+                    log.warning("refresh detail failed for %s: %s", asin, e)
+                    notes += f"detail {asin} failed; "
+                    continue
+                items.append(detail)
+                if on_item:
+                    try:
+                        on_item(detail)
+                    except Exception as e:  # noqa: BLE001 - persistence must not abort
+                        log.warning("on_item failed for %s: %s", asin, e)
+        finally:
+            _save_storage_state(ctx)
+            ctx.close()
+            browser.close()
+
+    if not items and status == "ok":
+        status = "failed"
+        notes += "no items refreshed; "
+    dur = time.time() - t0
+    cs = cache.stats
+    stats = (f"[refresh n={len(asins)} got={len(items)} dur={dur:.0f}s "
+             f"cache hits={cs['hits']} misses={cs['misses']}]")
+    log.info("hourly refresh: %s status=%s", stats, status)
+    notes = (notes + " " + stats).strip()
+    return items, status, notes
+
+
 def scrape(on_item=None, on_progress=None, known_asins=None, detailed_asins=None,
            full=False, category_counts=None, watchlist_asins=None):
     """Run a scrape. Calls on_item(item) per product and on_progress(phase, done, total).
