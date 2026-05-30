@@ -1,13 +1,32 @@
-"""Playwright scraper for amazon.co.uk battery-bank listings."""
+"""Playwright scraper for amazon.co.uk battery-bank listings.
+
+Two refresh paths:
+- refresh_asins(asins): Playwright detail-page visits (heavyweight, needed when
+  pages require JS).
+- refresh_asins_http(asins): urllib + BeautifulSoup (lightweight, no browser
+  fingerprint). Default for the hourly cycle — Amazon serves a full HTML
+  product page to a plain curl-style request without CAPTCHA, while the same
+  IP via headless Chromium gets challenged. This is why the hourly works
+  reliably and the discovery search-pagination still needs Playwright.
+"""
 import datetime
+import gzip
 import logging
 import os
 import random
 import time
+import zlib
 from collections import deque
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:  # pragma: no cover
+    BeautifulSoup = None
 try:
     from playwright_stealth import stealth_sync
 except ImportError:  # stealth is optional; fall back to plain playwright
@@ -382,6 +401,196 @@ def _save_storage_state(ctx):
         ctx.storage_state(path=STORAGE_STATE_PATH)
     except Exception as e:  # noqa: BLE001
         log.warning("storage_state save failed: %s", e)
+
+
+def _http_get(url, timeout=20):
+    """Plain HTTPS GET that mimics a real browser request enough for Amazon to
+    serve a full product page. Handles gzip/deflate so the response is text."""
+    req = Request(url, headers={
+        "User-Agent": config.USER_AGENT,
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
+                   "image/avif,image/webp,*/*;q=0.8"),
+        "Accept-Encoding": "gzip, deflate",
+        "Cache-Control": "no-cache",
+    })
+    with urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+        enc = (r.headers.get("Content-Encoding") or "").lower()
+    if enc == "gzip":
+        raw = gzip.decompress(raw)
+    elif enc == "deflate":
+        try:
+            raw = zlib.decompress(raw)
+        except zlib.error:
+            raw = zlib.decompress(raw, -zlib.MAX_WBITS)
+    return raw.decode("utf-8", errors="replace")
+
+
+def _bs_text(soup, *selectors):
+    """First selector that yields non-empty text wins."""
+    for sel in selectors:
+        node = soup.select_one(sel)
+        if node:
+            t = node.get_text(" ", strip=True)
+            if t:
+                return t
+    return ""
+
+
+def _parse_detail_html(html, asin):
+    """Same shape as _scrape_detail's return value, parsed from raw HTML rather
+    than a live Playwright page. The selectors mirror the Playwright ones so
+    the two paths populate the catalog identically."""
+    if BeautifulSoup is None:
+        raise RuntimeError("beautifulsoup4 is required for HTTP refresh")
+    soup = BeautifulSoup(html, "lxml")
+    # Captcha / interstitial detection
+    if soup.select_one("form[action*='validateCaptcha'], input#captchacharacters"):
+        raise BlockedError(f"blocked on product {asin}")
+
+    title = _bs_text(soup, "#productTitle")
+    brand = parse.clean_brand(_bs_text(soup, "#bylineInfo"))
+    if not brand:
+        known = config.TRUSTED_BRANDS + config.BRAND_BANKS + config.BRAND_STATIONS
+        brand = parse.brand_from_title(title, known)
+    bullets = _bs_text(soup, "#feature-bullets")
+    details = " ".join(filter(None, [
+        _bs_text(soup, "#productDetails_techSpec_section_1"),
+        _bs_text(soup, "#productDetails_techSpec_section_2"),
+        _bs_text(soup, "#productDetails_detailBullets_sections1"),
+        _bs_text(soup, "#productDetails_db_sections"),
+        _bs_text(soup, "#technicalSpecifications_section_1"),
+        _bs_text(soup, "#detailBullets_feature_div"),
+        _bs_text(soup, "#detailBulletsWrapper_feature_div"),
+        _bs_text(soup, "#productDetailsTable"),
+        _bs_text(soup, "table.prodDetTable"),
+        _bs_text(soup, "#prodDetails"),
+    ]))
+    price_txt = _bs_text(
+        soup,
+        "#corePriceDisplay_desktop_feature_div .priceToPay span.a-offscreen",
+        "#corePrice_feature_div .priceToPay span.a-offscreen",
+        "#corePrice_feature_div span.a-offscreen",
+        "#priceblock_ourprice",
+        "#price_inside_buybox",
+        "#apex_desktop .priceToPay span.a-offscreen",
+        "span.olpWrapper",
+        "span.a-price span.a-offscreen",
+    )
+    availability = _bs_text(soup, "#availability").lower()
+    rating_txt = _bs_text(
+        soup,
+        "#averageCustomerReviews span.a-icon-alt",
+        "span[data-hook='rating-out-of-text']",
+    )
+    if not rating_txt:
+        acr = soup.select_one("#acrPopover")
+        if acr:
+            rating_txt = acr.get("title") or ""
+    reviews_txt = _bs_text(soup, "#acrCustomerReviewText")
+    snippets = []
+    for node in soup.select("[data-hook='review-body']")[:8]:
+        t = node.get_text(" ", strip=True)
+        if t:
+            snippets.append(t)
+    in_stock = not (availability and ("unavailable" in availability
+                                      or "out of stock" in availability))
+
+    blob = " \n ".join([title, bullets, details])
+    pd_w, max_w = parse.extract_watts(blob)
+    usb_a, usb_c = parse.extract_ports(blob)
+    feats = parse.detect_features(blob)
+    spec_blob = details + " " + title
+
+    return {
+        "asin": asin,
+        "url": f"https://www.amazon.co.uk/dp/{asin}",
+        "brand": brand or None,
+        "title": title or None,
+        "price": parse.parse_price(price_txt),
+        "in_stock": in_stock,
+        "rating": parse.parse_rating(rating_txt),
+        "review_count": parse.parse_review_count(reviews_txt),
+        "claimed_mah": parse.extract_mah(title) or parse.extract_mah(blob),
+        "capacity_wh": parse.extract_wh(title) or parse.extract_wh(blob),
+        "chemistry": parse.extract_chemistry(spec_blob),
+        "weight_g": parse.extract_weight_g(details) or parse.extract_weight_g(blob),
+        "date_first_available": parse.extract_date_first_available(details)
+        or parse.extract_date_first_available(blob),
+        "usb_a": usb_a, "usb_c": usb_c, "max_w": max_w, "pd_w": pd_w,
+        "wireless": feats["wireless"], "display": feats["display"],
+        "passthrough": feats["passthrough"], "solar": feats["solar"],
+        "ac_output_w": parse.extract_ac_output_w(blob),
+        "ac_sockets": parse.extract_ac_sockets(blob),
+        "solar_input_w": parse.extract_solar_input_w(blob),
+        "cycle_life": parse.extract_cycle_life(blob),
+        "expandable": feats["expandable"], "ups": feats["ups"],
+        "raw_specs": {"bullets": bullets[:4000], "details": details[:4000]},
+        "review_snippets": snippets,
+    }
+
+
+def refresh_asins_http(asins, on_item=None, on_progress=None):
+    """Lightweight hourly refresh via urllib+BeautifulSoup. No browser, no
+    fingerprint. Returns (items, status, notes), same shape as refresh_asins."""
+    asins = list(dict.fromkeys(a for a in (asins or []) if a))
+    if not asins:
+        return [], "ok", "no asins to refresh"
+    items = []
+    notes = ""
+    status = "ok"
+    t0 = time.time()
+
+    def progress(phase, done, total):
+        if on_progress:
+            on_progress(phase, done, total)
+
+    for i, asin in enumerate(asins):
+        progress("refreshing", i, len(asins))
+        url = f"https://www.amazon.co.uk/dp/{asin}?th=1"
+        try:
+            html = _http_get(url)
+        except HTTPError as e:
+            if e.code in (404, 410):
+                notes += f"{asin} delisted (HTTP {e.code}); "
+            else:
+                notes += f"{asin} HTTP {e.code}; "
+            continue
+        except (URLError, TimeoutError) as e:
+            notes += f"{asin} fetch failed; "
+            continue
+        try:
+            detail = _parse_detail_html(html, asin)
+        except BlockedError:
+            status = "partial"
+            notes += f"CAPTCHA at {i}/{len(asins)}; "
+            break
+        except Exception as e:  # noqa: BLE001
+            log.warning("parse failed for %s: %s", asin, e)
+            notes += f"parse {asin} failed; "
+            continue
+        # Cache the raw HTML so subsequent parser changes can replay offline.
+        try:
+            cache.put(url, html)
+        except Exception as e:  # noqa: BLE001
+            log.warning("cache put failed for %s: %s", asin, e)
+        items.append(detail)
+        if on_item:
+            try:
+                on_item(detail)
+            except Exception as e:  # noqa: BLE001
+                log.warning("on_item failed for %s: %s", asin, e)
+        time.sleep(random.uniform(config.MIN_DELAY_S, config.MAX_DELAY_S))
+
+    if not items and status == "ok":
+        status = "failed"
+        notes += "no items refreshed; "
+    dur = time.time() - t0
+    stats = f"[http-refresh n={len(asins)} got={len(items)} dur={dur:.0f}s]"
+    log.info("hourly http refresh: %s status=%s", stats, status)
+    notes = (notes + " " + stats).strip()
+    return items, status, notes
 
 
 def refresh_asins(asins, on_item=None, on_progress=None):

@@ -311,7 +311,10 @@ def run_hourly_refresh(trigger="hourly"):
         def on_progress(phase, done, total):
             _progress.update(phase=phase, done=done, total=total)
 
-        items, status, notes = scraper.refresh_asins(
+        # HTTP + BS4: no browser fingerprint to detect, much cheaper than
+        # Playwright. The Playwright path stays available as scraper.refresh_asins
+        # for cases that need JS-rendered content.
+        items, status, notes = scraper.refresh_asins_http(
             asins, on_item=on_item, on_progress=on_progress)
         _progress.update(phase="reconciling", done=len(items), total=len(items))
 
