@@ -12,7 +12,7 @@
   function safeUrl(u) { return /^https?:\/\//i.test(u || "") ? esc(u) : "#"; }
 
   // ---- categories ----
-  const CATEGORIES = [["power_bank", "Power Banks"], ["power_station", "Power Stations"]];
+  const CATEGORIES = [["power_bank", "Power Banks"], ["power_station", "Power Stations"], ["watchlist", "Watchlist"]];
 
   // Value-to-you factors per category: [key, label, value(p), invert(lower-is-better)].
   const FACTORS_BY_CAT = {
@@ -38,6 +38,10 @@
       ["cycle_life", "Cycle life", p => p.cycle_life, false],
       ["expandable", "Expandable", p => (p.expandable ? 1 : 0), false],
       ["ups", "UPS", p => (p.ups ? 1 : 0), false],
+      ["rating", "High rating", p => p.rating, false],
+      ["honesty", "Honesty", p => honestyScore(p), false],
+    ],
+    watchlist: [
       ["rating", "High rating", p => p.rating, false],
       ["honesty", "Honesty", p => honestyScore(p), false],
     ],
@@ -91,6 +95,14 @@
       { key: "expandable", label: "Expandable", type: "check", test: (p, v) => !v || p.expandable },
       { key: "ups", label: "UPS", type: "check", test: (p, v) => !v || p.ups },
     ]),
+    // Watchlist items are arbitrary; the spec-specific filters don't apply.
+    watchlist: [
+      { key: "brand", label: "Brand contains", type: "text",
+        test: (p, v) => !v || (p.brand || "").toLowerCase().includes(v.toLowerCase()) },
+      { key: "rating", label: "Min rating", type: "num",
+        test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.rating || 0) >= v; } },
+      { key: "stock", label: "In stock only", type: "check", test: (p, v) => !v || p.in_stock },
+    ],
   };
   function filterSpecs() { return FILTERS_BY_CAT[state.category] || FILTERS_BY_CAT.power_bank; }
 
@@ -99,12 +111,13 @@
   // ---- persisted state ----
   const defaults = {
     category: "power_bank",
-    filtersByCat: { power_bank: { honesty: 0 }, power_station: { honesty: 0 } },
+    filtersByCat: { power_bank: { honesty: 0 }, power_station: { honesty: 0 }, watchlist: {} },
     honestyWeights: Object.assign(
       { physics: 0.4, price: 0.25, brand: 0.2, reviews: 0.15 }, D.honesty_weights || {}),
     weightsByCat: {
       power_bank: Object.fromEntries(FACTORS_BY_CAT.power_bank.map(([k]) => [k, 0])),
       power_station: Object.fromEntries(FACTORS_BY_CAT.power_station.map(([k]) => [k, 0])),
+      watchlist: Object.fromEntries(FACTORS_BY_CAT.watchlist.map(([k]) => [k, 0])),
     },
     sortKey: "rating", sortDir: -1,
   };
@@ -273,7 +286,12 @@
   }
   const CELL = {
     img: p => `<td class="px-2 py-2">${p.image_url ? `<img src="${safeUrl(p.image_url)}" class="w-10 h-10 object-contain">` : ""}</td>`,
-    product: p => `<td class="px-2 py-2 max-w-sm"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer" class="text-sky-300 hover:underline line-clamp-2">${esc(p.title || p.asin)}</a><div class="text-xs text-slate-500">${esc(p.brand || "?")}${p.chemistry ? " · " + esc(p.chemistry) : ""}</div></td>`,
+    product: p => {
+      const rm = p.category === "watchlist"
+        ? ` <button class="watchlist-rm text-red-400 hover:text-red-300 text-xs ml-1" data-asin="${esc(p.asin)}" title="Remove from watchlist">✕</button>`
+        : "";
+      return `<td class="px-2 py-2 max-w-sm"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer" class="text-sky-300 hover:underline line-clamp-2">${esc(p.title || p.asin)}</a>${rm}<div class="text-xs text-slate-500">${esc(p.brand || "?")}${p.chemistry ? " · " + esc(p.chemistry) : ""}</div></td>`;
+    },
     price: priceCell,
     mah: p => `<td class="px-2 py-2">${p.claimed_mah ? p.claimed_mah.toLocaleString() : "—"}</td>`,
     cost10k: p => { const c = costPer10k(p); return `<td class="px-2 py-2 whitespace-nowrap">${c != null ? "£" + c.toFixed(2) : "—"}</td>`; },
@@ -296,6 +314,10 @@
   const COLS_BY_CAT = {
     power_bank: HEAD.concat([["mAh", "claimed_mah", "mah"], ["£/10Ah", "cost_per_mah", "cost10k"]], TAIL),
     power_station: HEAD.concat([["Wh", "capacity_wh", "wh"], ["£/Wh", "cost_per_wh", "costwh"], ["AC W", "ac_output_w", "acw"]], TAIL),
+    // Watchlist holds arbitrary user-chosen items — fewer columns, capacity
+    // varies per item so no fixed capacity column. Trend + avg-price-delta are
+    // the user's primary signal here.
+    watchlist: HEAD.concat([["Features", null, "features"], ["Rating", "rating", "rating"], ["Trend", null, "trend"]]),
   };
   function cols() { return COLS_BY_CAT[state.category] || COLS_BY_CAT.power_bank; }
 
@@ -554,7 +576,56 @@
   }
   runBtn.onclick = () => startRun(false);
 
-  buildCatToggle();
+  // ---- watchlist ----
+  // A small URL-add form that lives inside the run-button area but only on the
+  // Watchlist page. Delete buttons in rows are handled via event delegation so
+  // they keep working after every re-render.
+  const watchlistBox = document.createElement("section");
+  watchlistBox.id = "watchlist-tools";
+  watchlistBox.className = "border-t border-slate-800 pt-3 mt-3 space-y-2 hidden";
+  watchlistBox.innerHTML = `
+    <h2 class="font-semibold text-slate-200">Add Amazon URL</h2>
+    <p class="text-xs text-slate-500">Paste any amazon.co.uk product URL — we'll track its price and average.</p>
+    <input id="wl-url" type="text" placeholder="https://www.amazon.co.uk/dp/B0..." class="w-full bg-slate-800 rounded px-2 py-1 text-sm" />
+    <button id="wl-add" class="block w-full bg-emerald-700 hover:bg-emerald-600 text-white text-sm px-3 py-1.5 rounded">Add to watchlist</button>
+    <div id="wl-msg" class="text-xs text-slate-400"></div>`;
+  runBtn.parentNode.appendChild(watchlistBox);
+
+  function updateWatchlistVisibility() {
+    watchlistBox.classList.toggle("hidden", state.category !== "watchlist");
+  }
+  updateWatchlistVisibility();
+  const _origSetCategory = setCategory;
+  setCategory = function (cat) { _origSetCategory(cat); updateWatchlistVisibility(); };
+  buildCatToggle();  // rebind so the new setCategory wraps every click
+
+  document.getElementById("wl-add").onclick = () => {
+    const input = document.getElementById("wl-url");
+    const msg = document.getElementById("wl-msg");
+    const url = input.value.trim();
+    if (!url) { msg.textContent = "Paste a URL first."; return; }
+    msg.textContent = "Adding…";
+    fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ url }) })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) { msg.textContent = "Error: " + (d.error || "failed"); return; }
+        msg.textContent = `Added ${d.asin} — scraping in the background.`;
+        input.value = "";
+        setTimeout(liveTick, 1500);  // pick up the placeholder row
+      })
+      .catch(e => { msg.textContent = "Network error: " + e; });
+  };
+
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".watchlist-rm");
+    if (!btn) return;
+    const asin = btn.dataset.asin;
+    if (!confirm(`Remove ${asin} from your watchlist?`)) return;
+    fetch("/api/watchlist/" + encodeURIComponent(asin), { method: "DELETE" })
+      .then(r => r.json()).then(() => liveTick());
+  });
+
   buildHonestySliders();
   buildFilters();
   buildFeatureSliders();

@@ -239,9 +239,19 @@ def _scrape_detail(page, asin):
         _text(page, "#prodDetails"),
     ])
     title = _text(page, "#productTitle")
-    price_txt = (_text(page, "#corePrice_feature_div span.a-offscreen")
-                 or _text(page, "span.a-price span.a-offscreen")
-                 or _text(page, "#price_inside_buybox"))
+    # Buy-box first, then variant-aware selectors, then the page-wide fallback —
+    # multi-variant pages (e.g. EcoFlow Delta Pro 3 with several SKUs) otherwise
+    # match a teaser/accessory price instead of the selected variant.
+    price_txt = (
+        _text(page, "#corePriceDisplay_desktop_feature_div .priceToPay span.a-offscreen")
+        or _text(page, "#corePrice_feature_div .priceToPay span.a-offscreen")
+        or _text(page, "#corePrice_feature_div span.a-offscreen")
+        or _text(page, "#priceblock_ourprice")
+        or _text(page, "#price_inside_buybox")
+        or _text(page, "#apex_desktop .priceToPay span.a-offscreen")
+        or _text(page, "span.olpWrapper")  # "1 option from £X" pattern on variant pages
+        or _text(page, "span.a-price span.a-offscreen")
+    )
     availability = _text(page, "#availability").lower()
     rating_txt = (_text(page, "#averageCustomerReviews span.a-icon-alt")
                   or _attr(page, "#acrPopover", "title")
@@ -278,8 +288,10 @@ def _scrape_detail(page, asin):
         "in_stock": in_stock,
         "rating": parse.parse_rating(rating_txt),
         "review_count": parse.parse_review_count(reviews_txt),
-        "claimed_mah": parse.extract_mah(blob),
-        "capacity_wh": parse.extract_wh(blob),
+        "claimed_mah": parse.extract_mah(title) or parse.extract_mah(blob),
+        # Title is the most authoritative source for the headline spec; only fall
+        # back to bullets/details when the title carries no Wh number.
+        "capacity_wh": parse.extract_wh(title) or parse.extract_wh(blob),
         "chemistry": parse.extract_chemistry(spec_blob),
         "weight_g": parse.extract_weight_g(details) or parse.extract_weight_g(blob),
         "date_first_available": parse.extract_date_first_available(details)
@@ -339,7 +351,7 @@ def _card_only_item(c):
 
 
 def scrape(on_item=None, on_progress=None, known_asins=None, detailed_asins=None,
-           full=False, category_counts=None):
+           full=False, category_counts=None, watchlist_asins=None):
     """Run a scrape. Calls on_item(item) per product and on_progress(phase, done, total).
 
     - The least-populated category is collected first, and detail scraping is
@@ -424,6 +436,17 @@ def scrape(on_item=None, on_progress=None, known_asins=None, detailed_asins=None
 
             log.info("collected %d relevant cards across %d searches",
                      len(cards), len(config.SEARCHES))
+            # Add user-curated watchlist ASINs as synthetic cards so the same
+            # detail-scrape loop refreshes them. They have no card data and
+            # bypass the relevance filter further down.
+            if watchlist_asins:
+                seen_asins = {c["asin"] for c in cards}
+                for a in watchlist_asins:
+                    if a not in seen_asins:
+                        cards.append({"asin": a, "category": "watchlist",
+                                      "title": "", "price": None, "rating": None,
+                                      "review_count": None, "image_url": "",
+                                      "listing_position": None})
             if not cards and not page_blocked:
                 raise RuntimeError("no search results found")
             cards = order_detail_cards(cards, known_asins)
@@ -470,9 +493,11 @@ def scrape(on_item=None, on_progress=None, known_asins=None, detailed_asins=None
                 if not detail.get("title"):
                     detail["title"] = c.get("title")
                 detail["category"] = c.get("category")
-                # final relevance gate (category-aware) using the fuller detail data
-                if not _relevant(detail.get("title"), c.get("category"),
-                                 detail.get("claimed_mah"), detail.get("capacity_wh")):
+                # final relevance gate (category-aware) using the fuller detail data.
+                # Watchlist items are user-chosen — never gate them on relevance.
+                if (c.get("category") != "watchlist" and
+                        not _relevant(detail.get("title"), c.get("category"),
+                                      detail.get("claimed_mah"), detail.get("capacity_wh"))):
                     log.info("skipping irrelevant %s: %r", c["asin"], (detail.get("title") or "")[:60])
                     notes += f"skipped irrelevant {c['asin']}; "
                     continue

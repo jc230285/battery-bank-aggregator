@@ -4,3 +4,4 @@ APScheduler>=3.10
 playwright==1.47.0
 tf-playwright-stealth>=1.2
 numpy>=1.23
+scipy>=1.10

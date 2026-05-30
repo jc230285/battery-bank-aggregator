@@ -106,9 +106,16 @@ def run_cycle(trigger="manual", full=False):
                         (Product.claimed_mah.isnot(None)) | (Product.capacity_wh.isnot(None))).all()}
         cat_counts = dict(session.query(Product.category, func.count())
                           .group_by(Product.category).all())
+        # Watchlist items are user-chosen URLs — always include them in the
+        # detail-scrape queue and always fetch a fresh detail (excluded from the
+        # detailed_asins skip-set), so their price/avg stay current.
+        watchlist = {a for (a,) in session.query(Product.asin)
+                     .filter(Product.category == "watchlist").all()}
+        detailed = detailed - watchlist
         items, status, notes = scraper.scrape(
             on_item=on_item, on_progress=on_progress, known_asins=known,
-            detailed_asins=detailed, full=full, category_counts=cat_counts)
+            detailed_asins=detailed, full=full, category_counts=cat_counts,
+            watchlist_asins=watchlist)
         _progress.update(phase="reconciling", done=len(items), total=len(items))
 
         # Reconcile the catalog: always drop non-battery items; drop delisted ones
@@ -269,6 +276,92 @@ def api_run():
     threading.Thread(target=run_cycle, kwargs={"trigger": "manual", "full": full},
                      daemon=True).start()
     return jsonify({"started": True, "full": full})
+
+
+def _watchlist_scrape_one(asin):
+    """One-shot detail scrape for a single ASIN added to the watchlist. Shares
+    the global run-lock so a manual add can't collide with a cycle in flight."""
+    if not _run_lock.acquire(blocking=False):
+        log.info("watchlist scrape skipped (%s): another run in progress", asin)
+        return
+    sess = None
+    try:
+        from playwright.sync_api import sync_playwright
+        try:
+            from playwright_stealth import stealth_sync
+        except ImportError:
+            stealth_sync = None
+        sess = SessionLocal()
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=config.HEADLESS)
+            ctx_kwargs = dict(locale=config.LOCALE, user_agent=config.USER_AGENT,
+                              viewport={"width": 1366, "height": 900})
+            if os.path.exists(scraper.STORAGE_STATE_PATH):
+                ctx_kwargs["storage_state"] = scraper.STORAGE_STATE_PATH
+            ctx = browser.new_context(**ctx_kwargs)
+            page = ctx.new_page()
+            if stealth_sync is not None:
+                try:
+                    stealth_sync(page)
+                except Exception:
+                    pass
+            try:
+                detail = scraper._scrape_detail(page, asin)
+                detail["category"] = "watchlist"
+                _upsert(sess, detail)
+                sess.commit()
+                analysis.run_analysis(sess)
+            finally:
+                ctx.close()
+                browser.close()
+    except Exception as e:  # noqa: BLE001 - keep server alive on user-input scrape failure
+        log.warning("watchlist scrape failed for %s: %s", asin, e)
+    finally:
+        if sess is not None:
+            sess.close()
+        _run_lock.release()
+
+
+@app.route("/api/watchlist", methods=["POST"])
+def api_watchlist_add():
+    """Add an Amazon product URL to the watchlist. Creates a placeholder Product
+    row immediately and kicks off a background detail scrape."""
+    payload = request.get_json(silent=True) or {}
+    url = (payload.get("url") or "").strip()
+    asin = parse.asin_from_url(url)
+    if not asin:
+        return jsonify({"error": "could not parse ASIN from URL"}), 400
+    sess = SessionLocal()
+    try:
+        p = sess.get(Product, asin)
+        now = utcnow()
+        if p is None:
+            p = Product(asin=asin, category="watchlist",
+                        url=f"https://www.amazon.co.uk/dp/{asin}",
+                        first_seen=now, last_seen=now)
+            sess.add(p)
+        else:
+            p.category = "watchlist"
+            p.last_seen = now
+        sess.commit()
+    finally:
+        sess.close()
+    threading.Thread(target=_watchlist_scrape_one, args=(asin,), daemon=True).start()
+    return jsonify({"asin": asin, "queued": True})
+
+
+@app.route("/api/watchlist/<asin>", methods=["DELETE"])
+def api_watchlist_remove(asin):
+    sess = SessionLocal()
+    try:
+        p = sess.get(Product, asin)
+        if p is None or p.category != "watchlist":
+            return jsonify({"removed": False}), 404
+        sess.delete(p)
+        sess.commit()
+        return jsonify({"removed": True})
+    finally:
+        sess.close()
 
 
 scheduler = BackgroundScheduler(daemon=True)
