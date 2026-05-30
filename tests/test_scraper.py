@@ -107,8 +107,10 @@ def test_parse_detail_html_extracts_core_fields():
     assert result["title"] == "Anker 737 Power Bank 26800mAh"
     assert result["price"] == 79.99
     assert result["claimed_mah"] == 26800
+    assert result["weight_g"] == 635
     assert result["chemistry"] == "li-ion"
     assert result["pd_w"] == 65
+    assert result["review_count"] == 12345
     assert result["in_stock"] is True
     assert result["rating"] == 4.6
     assert result["asin"] == "B0ANKER01"

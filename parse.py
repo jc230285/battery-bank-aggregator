@@ -69,12 +69,24 @@ def is_battery_bank(title, mah=None):
 
 
 def extract_mah(text):
-    """Largest plausible mAh figure in the text, else None."""
+    """Largest plausible mAh figure in the text, else None.
+
+    Handles both mAh and bare Ah (some listings use '10Ah' for a 10000 mAh bank).
+    Bare-Ah values are only used when no mAh figures are found, and only when
+    the value×1000 falls in the plausible range."""
     if not text:
         return None
     t = text.lower().replace(",", "")
     vals = [int(x) for x in re.findall(r"(\d{3,7})\s*m\s*a\s*h", t)]
     vals = [v for v in vals if 500 <= v <= 500000]
+    if vals:
+        return max(vals)
+    # Fallback: bare "Ah" (not preceded by 'm'), e.g. "40Ah" → 40000 mAh.
+    # Negative lookbehind excludes the 'm' in 'mah'.
+    for m in re.finditer(r"(?<!m)(?<!\d)(\d+(?:\.\d+)?)\s*ah\b", t):
+        v = int(float(m.group(1)) * 1000)
+        if 500 <= v <= 500000:
+            vals.append(v)
     return max(vals) if vals else None
 
 
@@ -95,11 +107,11 @@ def _to_grams(value, unit):
     return value  # grams
 
 
-# Plausible weight range for a power bank in grams. Rejects misparses such as
-# "5G"/"5V 5A" read as "5 grams" (no real power bank is under ~40 g, and even
-# huge ones stay well under 6 kg once power stations are filtered out).
+# Plausible weight range in grams. Lower bound rejects misparses like "5G"→5 g.
+# Upper bound accommodates large power stations (Jackery Explorer 2000 Pro ~19.5 kg,
+# Anker SOLIX C1000 ~9 kg). Power banks well under 3 kg in practice.
 WEIGHT_MIN_G = 40.0
-WEIGHT_MAX_G = 6000.0
+WEIGHT_MAX_G = 30000.0
 
 
 def extract_weight_g(text):

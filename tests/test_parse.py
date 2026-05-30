@@ -13,6 +13,18 @@ def test_extract_mah_variants():
     assert parse.extract_mah("no capacity here") is None
 
 
+def test_extract_mah_ah_fallback():
+    # Some listings use bare Ah instead of mAh — should be converted ×1000.
+    assert parse.extract_mah("40Ah power bank") == 40000
+    assert parse.extract_mah("Capacity: 30 Ah") == 30000
+    # mAh takes priority over Ah when both present.
+    assert parse.extract_mah("20000mAh (20Ah) power bank") == 20000
+    # "mAh" must not be caught by the Ah fallback pattern.
+    assert parse.extract_mah("26800mAh") == 26800
+    # Sub-range Ah values rejected.
+    assert parse.extract_mah("0.3Ah button cell") is None
+
+
 def test_extract_weight_units():
     assert parse.extract_weight_g("Item Weight 350 g") == 350
     assert parse.extract_weight_g("Item Weight 0.35 Kilograms") == 350
@@ -20,6 +32,9 @@ def test_extract_weight_units():
     assert parse.extract_weight_g("no weight") is None
     # 'kg' must not be misread as grams
     assert parse.extract_weight_g("1.2 kg pack") == 1200
+    # Large power-station weights (up to 30 kg) must parse correctly.
+    assert parse.extract_weight_g("Item Weight 19.5 Kilograms") == 19500
+    assert parse.extract_weight_g("Weight: 9.2 kg") == 9200
 
 
 def test_extract_weight_amazon_formats():
