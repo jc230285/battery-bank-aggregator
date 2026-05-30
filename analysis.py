@@ -162,9 +162,9 @@ def max_plausible_wh(weight_g, chemistry=None):
 
 
 def max_plausible_mah(weight_g, chemistry=None):
-    """Plausible Wh ceiling expressed as mAh at the nominal cell voltage."""
+    """Plausible Wh ceiling expressed as mAh at the chemistry's nominal cell voltage."""
     wh = max_plausible_wh(weight_g, chemistry)
-    return wh / config.NOMINAL_CELL_VOLTAGE * 1000.0 if wh else None
+    return wh / nominal_voltage(chemistry) * 1000.0 if wh else None
 
 
 def brand_subscore(brand):

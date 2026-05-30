@@ -39,11 +39,35 @@ def test_physics_is_chemistry_aware():
 
 
 def test_max_plausible_mah():
-    # 250 g pack at 260 Wh/kg ceiling -> 65 Wh -> ~17567 mAh at 3.7 V
+    # 250 g Li-ion at 260 Wh/kg -> 65 Wh -> ~17567 mAh at 3.7 V
     cap = analysis.max_plausible_mah(250)
     assert 17000 < cap < 18000
     assert analysis.max_plausible_mah(None) is None
     assert analysis.max_plausible_mah(0) is None
+
+
+def test_max_plausible_mah_chemistry_aware():
+    # LiFePO4: lower density (160 Wh/kg) AND lower voltage (3.2 V).
+    # 500 g LiFePO4: 500/1000 * 160 = 80 Wh -> 80/3.2 * 1000 = 25000 mAh
+    lfp = analysis.max_plausible_mah(500, "lifepo4")
+    assert 24000 < lfp < 26000
+    # Li-ion: 500/1000 * 260 = 130 Wh -> 130/3.7 * 1000 ≈ 35135 mAh
+    lion = analysis.max_plausible_mah(500, "li-ion")
+    assert 34000 < lion < 36000
+    # LiFePO4 always gives fewer mAh per gram than Li-ion.
+    assert lfp < lion
+
+
+def test_capacity_wh_of_chemistry_aware():
+    class P:
+        pass
+    p = P()
+    p.capacity_wh = None
+    p.chemistry = "lifepo4"
+    p.claimed_mah = 20000
+    # 20000 mAh at 3.2 V -> 64 Wh (not 74 Wh as for Li-ion at 3.7 V)
+    wh = analysis.capacity_wh_of(p)
+    assert 63 < wh < 65
 
 
 def test_brand_subscore():

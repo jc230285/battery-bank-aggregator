@@ -205,7 +205,7 @@ def _brand_searches(today=None):
             continue
         brand = brands[seed % len(brands)]
         q = brand.replace(" ", "+").lower()
-        suffix = "+power+bank" if category == "power_bank" else "+lifepo4+power+station"
+        suffix = "+power+bank" if category == "power_bank" else "+portable+power+station"
         out.append({"category": category, "brand": brand,
                     "url": f"https://www.amazon.co.uk/s?k={q}{suffix}&s=review-rank"})
     return out
@@ -709,24 +709,7 @@ def scrape(on_item=None, on_progress=None, known_asins=None, detailed_asins=None
     cache.reset_stats()
     progress("launching browser", 0, config.TOP_N)
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=config.HEADLESS)
-        ctx_kwargs = dict(
-            locale=config.LOCALE, user_agent=config.USER_AGENT,
-            viewport={"width": 1366, "height": 900},
-        )
-        # Persist cookies/localStorage between runs so Amazon sees a returning
-        # visitor rather than a fresh fingerprint each cycle (CAPTCHA-mitigation).
-        if os.path.exists(STORAGE_STATE_PATH):
-            ctx_kwargs["storage_state"] = STORAGE_STATE_PATH
-        ctx = browser.new_context(**ctx_kwargs)
-        page = ctx.new_page()
-        # Apply playwright-stealth patches (navigator.webdriver, plugins, languages,
-        # chrome runtime) — reduces but doesn't eliminate Amazon's bot detection.
-        if stealth_sync is not None:
-            try:
-                stealth_sync(page)
-            except Exception as e:  # noqa: BLE001 - stealth is best-effort
-                log.warning("stealth patches failed: %s", e)
+        browser, ctx, page = _open_browser_context(pw)
         try:
             # Collect cards from every configured search, tagging each with its
             # category and deduping ASINs across searches.

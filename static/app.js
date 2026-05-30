@@ -106,6 +106,7 @@
       { key: "rating", label: "Min rating", type: "num",
         test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.rating || 0) >= v; } },
       { key: "stock", label: "In stock only", type: "check", test: (p, v) => !v || p.in_stock },
+      { key: "showDelisted", label: "Show delisted", type: "check", test: (p, v) => v || !p.delisted_at },
     ],
   };
   function filterSpecs() { return FILTERS_BY_CAT[state.category] || FILTERS_BY_CAT.power_bank; }
@@ -131,9 +132,9 @@
       const s = JSON.parse(localStorage.getItem(LS_KEY)) || {};
       if (s.category) base.category = s.category;
       Object.assign(base.honestyWeights, s.honestyWeights || {});
-      ["power_bank", "power_station"].forEach(c => {
-        if (s.filtersByCat) Object.assign(base.filtersByCat[c], s.filtersByCat[c] || {});
-        if (s.weightsByCat) Object.assign(base.weightsByCat[c], s.weightsByCat[c] || {});
+      CATEGORIES.forEach(([c]) => {
+        if (s.filtersByCat && base.filtersByCat[c]) Object.assign(base.filtersByCat[c], s.filtersByCat[c] || {});
+        if (s.weightsByCat && base.weightsByCat[c]) Object.assign(base.weightsByCat[c], s.weightsByCat[c] || {});
       });
       if (s.sortKey) base.sortKey = s.sortKey;
       if (s.sortDir) base.sortDir = s.sortDir;

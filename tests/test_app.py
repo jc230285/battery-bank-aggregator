@@ -122,6 +122,24 @@ def test_upsert_clears_delisted_at_on_reappearance():
             sess.close()
 
 
+def test_product_dict_all_time_low_high():
+    now = datetime.datetime(2026, 5, 29, 12, 0, 0)
+    p = models.Product(asin="B0ATL", price=19.0)
+    p.history = [
+        models.PriceHistory(price=25.0, captured_at=now),
+        models.PriceHistory(price=18.0, captured_at=now),
+        models.PriceHistory(price=22.0, captured_at=now),
+        models.PriceHistory(price=None, captured_at=now),  # nulls ignored
+    ]
+    d = app._product_dict(p)
+    assert d["all_time_low"] == 18.0
+    assert d["all_time_high"] == 25.0
+    # Product with no price history has None for both.
+    p2 = models.Product(asin="B0NOATL", price=20.0)
+    d2 = app._product_dict(p2)
+    assert d2["all_time_low"] is None and d2["all_time_high"] is None
+
+
 def test_captcha_cooldown_until_when_recent_captcha():
     with _isolated_db(BBA_CAPTCHA_BACKOFF_HOURS="6"):
         sess = models.SessionLocal()

@@ -145,6 +145,8 @@ def init_db():
         "expandable": "BOOLEAN",
         "ups": "BOOLEAN",
         "delisted_at": "DATETIME",
+        "listing_position": "INTEGER",
+        "image_url": "TEXT",
     }
     with engine.begin() as conn:
         existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(products)")}

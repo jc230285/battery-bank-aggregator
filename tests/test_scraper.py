@@ -48,6 +48,30 @@ def test_order_detail_cards_interleaves_and_new_first():
     assert sorted(out) == ["pb1", "pb2", "pb3", "ps1"]
 
 
+def test_brand_searches_url_format():
+    import datetime as dt
+    today = dt.date(2026, 5, 29)
+    searches = scraper._brand_searches(today)
+    assert len(searches) == 2
+    bank = next(s for s in searches if s["category"] == "power_bank")
+    station = next(s for s in searches if s["category"] == "power_station")
+    assert "+power+bank" in bank["url"]
+    assert "+portable+power+station" in station["url"]
+    assert "amazon.co.uk" in bank["url"]
+    assert "s=review-rank" in station["url"]
+    assert bank.get("brand")  # a brand is always picked
+
+
+def test_parse_detail_html_detects_title_captcha():
+    # Amazon's "Robot Check" page has a recognisable <title> — must raise BlockedError.
+    html = "<html><head><title>Robot Check</title></head><body><p>sorry</p></body></html>"
+    try:
+        scraper._parse_detail_html(html, "B0TEST")
+        assert False, "expected BlockedError"
+    except scraper.BlockedError:
+        pass
+
+
 def test_new_first_ordering_key():
     # The scraper sorts cards so unseen ASINs come before known ones.
     known = {"b", "d"}
