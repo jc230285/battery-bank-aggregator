@@ -86,9 +86,10 @@ def extract_mah(text):
     if not text:
         return None
     t = text.lower().replace(",", "")
-    # European thousands separator: "40.000mAh" means 40,000 mAh.
-    # Pattern: 1-4 digits, a period, exactly 3 digits, directly before mAh.
+    # European period-thousands separator: "40.000mAh" means 40,000 mAh.
     t = re.sub(r"(\d{1,4})\.(\d{3})(?=\s*m\s*a\s*h)", lambda m: m.group(1) + m.group(2), t)
+    # Space-as-thousands separator: "20 000 mAh" (French/Russian) means 20,000 mAh.
+    t = re.sub(r"(\d{1,3})\s(\d{3})(?=\s*m\s*a\s*h)", lambda m: m.group(1) + m.group(2), t)
     vals = [int(x) for x in re.findall(r"(\d{3,7})\s*m\s*a\s*h", t)]
     vals = [v for v in vals if 500 <= v <= 500000]
     if vals:
@@ -323,7 +324,10 @@ def extract_chemistry(text):
 
 
 _WH_SKIP_PRECEDERS = (
-    "expandable", "expanded", "expand to", "expand it to", "expand up to",
+    # Directional-only: "expandable to/up to" fires only when the value follows
+    # the expansion phrase, not when "Expandable from X" means X is the base.
+    "expandable to", "expandable up to", "expanded to",
+    "expand to", "expand it to", "expand up to",
     "up to", "maximum", "max ", "increase to", "extend to", "with extra",
     "with additional", "scalable to", "scales to",
 )

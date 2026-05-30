@@ -236,6 +236,16 @@ def test_clean_brand():
     assert parse.clean_brand("EcoFlow Online") == "EcoFlow"
 
 
+def test_extract_wh_expandable_from():
+    # "Expandable from 2048Wh up to 20480Wh" — base capacity is 2048, not the max.
+    assert parse.extract_wh("Expandable from 2048Wh up to 20480Wh") == 2048
+    # "expandable to" form: skip the extended value, keep the base.
+    assert parse.extract_wh("2016Wh expandable to 20kWh") == 2016
+    assert parse.extract_wh("1024Wh, expand to 3072Wh") == 1024
+    # "up to X Wh" alone → skip all → None
+    assert parse.extract_wh("up to 2000Wh capacity") is None
+
+
 def test_brand_from_title():
     known = ["Anker", "Anker SOLIX", "EF ECOFLOW", "VTOMAN", "EcoFlow"]
     # Known brand wins (longest-match-first so 'EF ECOFLOW' beats 'EcoFlow').
@@ -272,6 +282,13 @@ def test_extract_mah_european_decimal():
     assert parse.extract_mah("26.800 mAh") == 26800
     # Ensure normal decimals aren't broken.
     assert parse.extract_mah("20000mAh") == 20000
+
+
+def test_extract_mah_space_thousands():
+    # Space-as-thousands separator used in French/Russian listings.
+    assert parse.extract_mah("20 000 mAh capacity") == 20000
+    assert parse.extract_mah("30 000mAh") == 30000
+    assert parse.extract_mah("26 800 mAh") == 26800
 
 
 def test_clean_brand_corporate_suffixes():
