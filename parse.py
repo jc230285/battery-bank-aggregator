@@ -86,6 +86,8 @@ def extract_mah(text):
     if not text:
         return None
     t = text.lower().replace(",", "")
+    # Normalise Unicode dot-separators used in some Chinese listings: "20000mA·h".
+    t = t.replace("·", "").replace("∙", "").replace("•", "")
     # European period-thousands separator: "40.000mAh" means 40,000 mAh.
     t = re.sub(r"(\d{1,4})\.(\d{3})(?=\s*m\s*a\s*h)", lambda m: m.group(1) + m.group(2), t)
     # Space-as-thousands separator: "20 000 mAh" (French/Russian) means 20,000 mAh.
@@ -356,7 +358,7 @@ def extract_wh(text):
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*kwh", t):
         if not _skipped(m.start(), m.end()):
             vals.append(float(m.group(1)) * 1000)
-    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*whr?\b", t):
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(?:whr?\b|watt[\s\-]?hours?)", t):
         if not _skipped(m.start(), m.end()):
             vals.append(float(m.group(1)))
     vals = [v for v in vals if 50 <= v <= 20000]
@@ -368,14 +370,15 @@ def extract_ac_output_w(text):
     if not text:
         return None
     t = text.lower()
+    _W = r"w(?:att)?s?"
     surge = set()  # wattages explicitly labelled surge/peak — excluded
-    for m in re.finditer(r"(\d{3,4})\s*w\s*(?:surge|peak)", t):
+    for m in re.finditer(r"(\d{3,4})\s*" + _W + r"\s*(?:surge|peak)", t):
         surge.add(int(m.group(1)))
     # surge directly followed by the number (no comma) — "surge 2000W", "peak: 2000W"
-    for m in re.finditer(r"(?:surge|peak)\s*:?\s*(\d{3,4})\s*w", t):
+    for m in re.finditer(r"(?:surge|peak)\s*:?\s*(\d{3,4})\s*" + _W, t):
         surge.add(int(m.group(1)))
     best = None
-    for m in re.finditer(r"(\d{3,4})\s*w\b", t):
+    for m in re.finditer(r"(\d{3,4})\s*" + _W + r"\b", t):
         v = int(m.group(1))
         if not (100 <= v <= 8000) or v in surge:
             continue
@@ -388,7 +391,7 @@ def extract_ac_output_w(text):
     _station_terms = ("power station", "power bank station", "energy station",
                       "energy storage station", "battery generator")
     if best is None and any(k in t for k in _station_terms):
-        for m in re.finditer(r"(\d{3,4})\s*w\b", t):
+        for m in re.finditer(r"(\d{3,4})\s*" + _W + r"\b", t):
             v = int(m.group(1))
             if 100 <= v <= 8000 and v not in surge:
                 best = max(best or 0, v)

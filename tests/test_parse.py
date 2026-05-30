@@ -238,6 +238,21 @@ def test_clean_brand():
     assert parse.clean_brand("Visit the Anker UK Direct Store") == "Anker"
 
 
+def test_extract_wh_spelled_out():
+    # "watt hour(s)" and "watt-hours" should parse like "Wh".
+    assert parse.extract_wh("1000 watt hour capacity") == 1000
+    assert parse.extract_wh("500 watt-hours") == 500
+    assert parse.extract_wh("2000 watthours") == 2000
+
+
+def test_extract_ac_output_w_spelled_out():
+    # "watts" / "watt" spelled out must also be recognised.
+    assert parse.extract_ac_output_w("rated at 1800 watts") == 1800
+    assert parse.extract_ac_output_w("1000 watt pure sine output") == 1000
+    # Surge/peak in "watts" form is still excluded.
+    assert parse.extract_ac_output_w("2000 watts surge, 1800 watts rated") == 1800
+
+
 def test_extract_wh_expandable_from():
     # "Expandable from 2048Wh up to 20480Wh" — base capacity is 2048, not the max.
     assert parse.extract_wh("Expandable from 2048Wh up to 20480Wh") == 2048
@@ -294,6 +309,12 @@ def test_extract_mah_space_thousands():
     assert parse.extract_mah("20 000 mAh capacity") == 20000
     assert parse.extract_mah("30 000mAh") == 30000
     assert parse.extract_mah("26 800 mAh") == 26800
+
+
+def test_extract_mah_unicode_dot():
+    # Some Chinese Amazon listings use a Unicode middle dot as the mA·h separator.
+    assert parse.extract_mah("20000mA·h power bank") == 20000
+    assert parse.extract_mah("26800mA∙h") == 26800
 
 
 def test_clean_brand_corporate_suffixes():
