@@ -79,9 +79,9 @@ BRAND_BANKS = [
     "Belkin", "Mophie", "Verbatim", "Energizer", "Miady",
 ]
 BRAND_STATIONS = [
-    "EcoFlow", "Jackery", "BLUETTI", "Anker SOLIX", "Goal Zero",
+    "EcoFlow", "EF ECOFLOW", "Jackery", "BLUETTI", "Anker SOLIX", "Goal Zero",
     "Allpowers", "Oukitel", "Fossibot", "VTOMAN", "Pecron",
-    "Renogy", "Growatt", "Aferiy", "Poweroak", "BioLite",
+    "Renogy", "Growatt", "Aferiy", "Poweroak", "BioLite", "DJI Power",
 ]
 
 # Physics: Li-ion energy density ceiling (generous) and nominal cell voltage.
@@ -116,7 +116,8 @@ TRUSTED_BRANDS = [
     "AUKEY", "Mophie", "Xiaomi", "Samsung", "Spigen", "OtterBox", "Goal Zero",
     "EcoFlow", "Nitecore", "Charmast", "VEGER", "Romoss", "Cuktech",
     "Sharge", "Shargeek", "BioLite", "Jackery", "Poweradd", "Omnicharge",
-    "BLUETTI", "Renogy", "Growatt", "Allpowers", "Pecron",
+    "BLUETTI", "Renogy", "Growatt", "Allpowers", "Pecron", "EF ECOFLOW", "DJI Power",
+    "VTOMAN", "Fossibot", "Oukitel",
 ]
 
 # Review phrases that suggest overstated / fake capacity.
