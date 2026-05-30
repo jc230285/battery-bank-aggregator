@@ -48,6 +48,17 @@ def test_physics_flags_impossible_without_weight():
     assert analysis.physics_subscore(cap_20k, None) == (None, None)
 
 
+def test_physics_weightless_ceiling_skipped_when_weight_known():
+    # A real power station: Jackery 1000 Pro is 1002 Wh, ~11.5 kg.
+    # The 1-kg weightless ceiling (260 Wh) must NOT fire when we have actual weight.
+    score, flag = analysis.physics_subscore(1002, 11500, "li-ion")
+    assert flag is None, "power station with real weight must not get impossible_capacity"
+    assert score is not None
+    # Same capacity with NO weight — should still flag (no weight -> unknown product).
+    score2, flag2 = analysis.physics_subscore(1002, None)
+    assert flag2 == "impossible_capacity"
+
+
 def test_physics_is_chemistry_aware():
     # 100 Wh @ 500 g: fine as Li-ion (floor ~385 g) but impossible as LiFePO4 (~625 g).
     assert analysis.physics_subscore(100, 500, "li-ion")[1] is None

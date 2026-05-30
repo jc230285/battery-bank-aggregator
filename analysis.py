@@ -148,12 +148,12 @@ def physics_subscore(capacity_wh, weight_g, chemistry=None):
     than a 1 kg Li-ion pack could hold is physically impossible regardless of
     what the seller states."""
     weight_g = _clean_weight(weight_g)
-    if capacity_wh:
-        # Weightless ceiling: max energy a 1 kg Li-ion pack can hold at best-case
-        # density.  Anything above this is impossible even without a measured weight.
+    if capacity_wh and weight_g is None:
+        # Weightless ceiling: only applied when weight is unknown (power banks).
+        # A power station with a real weight uses the weight-based check below.
+        # Ceiling = max energy a 1 kg Li-ion pack could hold at best-case density.
         max_wh_weightless = energy_density(chemistry) * 1.0  # 1 kg
         if capacity_wh > max_wh_weightless:
-            # Score proportional to the excess — the further over the ceiling, the worse.
             ratio = max_wh_weightless / capacity_wh
             return max(0.0, ratio), "impossible_capacity"
     if not capacity_wh or not weight_g or weight_g <= 0:
