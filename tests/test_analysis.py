@@ -169,6 +169,25 @@ def test_self_consistency_flags_inflated_wh():
     assert score < 0.5
 
 
+def test_review_velocity_flag():
+    import datetime
+    today = datetime.date.today()
+    # 3000 reviews in 60 days -> suspicious
+    listed_60d = (today - datetime.timedelta(days=60)).isoformat()
+    assert analysis.review_velocity_flag(3000, listed_60d) == "suspicious_review_velocity"
+    # 6000 reviews in 150 days -> suspicious
+    listed_150d = (today - datetime.timedelta(days=150)).isoformat()
+    assert analysis.review_velocity_flag(6000, listed_150d) == "suspicious_review_velocity"
+    # 500 reviews in 60 days -> fine
+    assert analysis.review_velocity_flag(500, listed_60d) is None
+    # Well-established product with many reviews -> fine (>180 days)
+    listed_200d = (today - datetime.timedelta(days=200)).isoformat()
+    assert analysis.review_velocity_flag(10000, listed_200d) is None
+    # Missing data -> None
+    assert analysis.review_velocity_flag(None, listed_60d) is None
+    assert analysis.review_velocity_flag(3000, None) is None
+
+
 def test_brand_mimicry_catches_typosquats_only():
     # Trusted brands and substring variants don't trigger
     assert analysis.brand_mimicry_flag("Anker") is None

@@ -253,6 +253,24 @@ def brand_honesty(brand, reps):
     return rep, flag
 
 
+def review_velocity_flag(review_count, date_first_available):
+    """Flag suspiciously fast review accumulation: >5000 reviews within 6 months
+    of listing, or >2000 reviews within 3 months. Returns flag string or None."""
+    if not review_count or not date_first_available:
+        return None
+    try:
+        listed = datetime.date.fromisoformat(date_first_available)
+    except (ValueError, TypeError):
+        return None
+    age_days = (datetime.date.today() - listed).days
+    if age_days <= 0:
+        return None
+    reviews_per_day = review_count / age_days
+    if (age_days <= 90 and review_count > 2000) or (age_days <= 180 and review_count > 5000):
+        return "suspicious_review_velocity"
+    return None
+
+
 def reviews_subscore(snippets):
     if not snippets:
         return None, None
@@ -518,7 +536,8 @@ def run_analysis(session):
                     p.honesty["mah_cap"] = round(plausible_wh / nominal_voltage(p.chemistry) * 1000)
                 if cap_wh > plausible_wh:
                     p.honesty["overstatement_pct"] = round(100 * (cap_wh - plausible_wh) / plausible_wh)
-            p.honesty_flags = [f for f in (f_phys, f_price, f_rev, f_cons) if f]  # brand flag added below
+            f_vel = review_velocity_flag(p.review_count, p.date_first_available)
+            p.honesty_flags = [f for f in (f_phys, f_price, f_rev, f_cons, f_vel) if f]  # brand flag added below
 
         reps = brand_reputations(group)
         reps_all.update(reps)

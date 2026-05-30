@@ -306,7 +306,8 @@
   }
   const _CRITICAL_FLAGS = new Set(["impossible_capacity", "reviews_report_fake_capacity"]);
   const _WARN_FLAGS = new Set(["too_cheap_per_capacity", "inconsistent_capacity_claims",
-                               "unverified_brand", "unknown_brand", "brand_low_reputation"]);
+                               "unverified_brand", "unknown_brand", "brand_low_reputation",
+                               "suspicious_review_velocity"]);
   const _FLAG_LABELS = {
     impossible_capacity:          "Capacity overstated",
     reviews_report_fake_capacity: "Reviewers report fake capacity",
@@ -315,6 +316,7 @@
     unverified_brand:             "Unverified brand",
     unknown_brand:                "Unknown brand",
     brand_low_reputation:         "Low brand reputation",
+    suspicious_review_velocity:   "Reviews accumulated unusually fast",
   };
   function _flagLabel(f) {
     if (_FLAG_LABELS[f]) return _FLAG_LABELS[f];
