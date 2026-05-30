@@ -58,6 +58,7 @@ def test_product_dict_serialization():
 
     assert d["asin"] == "B0X"
     assert d["price"] == 29.99 and d["wireless"] is True
+    assert d["listing_position"] is None  # not set on this fixture
     assert d["honesty"]["physics"] == 1.0
     assert d["feature_contrib"] == {"capacity": 5.0, "wireless": 7.49}
     assert d["history"] == []  # transient object -> no price-history rows
