@@ -63,6 +63,8 @@
       options: [["", "Any"], ["lifepo4", "LiFePO4"], ["li-ion", "Li-ion"],
                 ["li-po", "Li-polymer"], ["nmc", "NMC"], ["unknown", "Unknown"]],
       test: (p, v) => !v || (v === "unknown" ? !p.chemistry : p.chemistry === v) },
+    { key: "maxPrice", label: "Max price (£)", type: "num",
+      test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.price != null && p.price <= v); } },
     { key: "rating", label: "Min rating", type: "num",
       test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.rating || 0) >= v; } },
     { key: "minReviews", label: "Min ratings (count)", type: "num",
@@ -90,6 +92,8 @@
     power_station: COMMON_FILTERS.concat([
       { key: "wh", label: "Min Wh", type: "num",
         test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.capacity_wh || 0) >= v; } },
+      { key: "whMax", label: "Max Wh", type: "num",
+        test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.capacity_wh || 0) <= v; } },
       { key: "acw", label: "Min AC output (W)", type: "num",
         test: (p, v) => { v = parseFloat(v) || 0; return !v || (p.ac_output_w || 0) >= v; } },
       { key: "sockets", label: "Min AC sockets", type: "num",
