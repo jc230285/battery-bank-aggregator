@@ -254,7 +254,7 @@ def extract_chemistry(text):
         return "lto"
     if "nmc" in t or "ternary lithium" in t:
         return "nmc"
-    if any(k in t for k in ("lithium polymer", "li-polymer", "li-po", "lipo", "polymer")):
+    if any(k in t for k in ("lithium polymer", "li-polymer", "li-po", "lipo", "polymer battery", "polymer cell")):
         return "li-po"
     if any(k in t for k in ("lithium-ion", "lithium ion", "li-ion", "liion", "lithium battery")):
         return "li-ion"

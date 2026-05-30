@@ -127,5 +127,5 @@ FAKE_PHRASES = [
 # LiFePO4 cells sit at ~3.2 V nominal vs Li-ion ~3.7 V; this matters for the
 # mAh<->Wh self-consistency check (a 100Wh LiFePO4 pack is ~31Ah, not ~27Ah).
 NOMINAL_VOLTAGE_BY_CHEMISTRY = {
-    "lifepo4": 3.2, "li-ion": 3.7, "li-po": 3.7, "nmc": 3.7,
+    "lifepo4": 3.2, "li-ion": 3.7, "li-po": 3.7, "nmc": 3.7, "lto": 2.3,
 }

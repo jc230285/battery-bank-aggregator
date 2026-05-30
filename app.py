@@ -429,41 +429,36 @@ def run_hourly_refresh(trigger="hourly"):
 
 
 def _watchlist_scrape_one(asin):
-    """One-shot detail scrape for a single ASIN added to the watchlist. Shares
-    the global run-lock so a manual add can't collide with a cycle in flight."""
+    """One-shot detail scrape for a newly-added watchlist ASIN via the HTTP
+    path (same as the hourly refresh). Respects CAPTCHA cooldown so a user
+    add during a bad-IP window doesn't make things worse."""
     if not _run_lock.acquire(blocking=False):
         log.info("watchlist scrape skipped (%s): another run in progress", asin)
         return
+    cs = SessionLocal()
+    try:
+        cooldown = _captcha_cooldown_until(cs)
+    finally:
+        cs.close()
+    if cooldown is not None:
+        log.info("watchlist scrape skipped (%s): CAPTCHA cooldown until %s",
+                 asin, cooldown.isoformat())
+        _run_lock.release()
+        return
     sess = None
     try:
-        from playwright.sync_api import sync_playwright
-        try:
-            from playwright_stealth import stealth_sync
-        except ImportError:
-            stealth_sync = None
         sess = SessionLocal()
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=config.HEADLESS)
-            ctx_kwargs = dict(locale=config.LOCALE, user_agent=config.USER_AGENT,
-                              viewport={"width": 1366, "height": 900})
-            if os.path.exists(scraper.STORAGE_STATE_PATH):
-                ctx_kwargs["storage_state"] = scraper.STORAGE_STATE_PATH
-            ctx = browser.new_context(**ctx_kwargs)
-            page = ctx.new_page()
-            if stealth_sync is not None:
-                try:
-                    stealth_sync(page)
-                except Exception:
-                    pass
-            try:
-                detail = scraper._scrape_detail(page, asin)
-                detail["category"] = "watchlist"
-                _upsert(sess, detail)
-                sess.commit()
-                analysis.run_analysis(sess)
-            finally:
-                ctx.close()
-                browser.close()
+
+        def on_item(item):
+            p = _upsert(sess, item)
+            p.category = "watchlist"
+            sess.commit()
+
+        items, status, notes = scraper.refresh_asins_http([asin], on_item=on_item)
+        if items:
+            analysis.run_analysis(sess)
+        else:
+            log.warning("watchlist scrape yielded nothing for %s: %s (%s)", asin, notes, status)
     except Exception as e:  # noqa: BLE001 - keep server alive on user-input scrape failure
         log.warning("watchlist scrape failed for %s: %s", asin, e)
     finally:

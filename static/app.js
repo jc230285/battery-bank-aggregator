@@ -145,6 +145,14 @@
   function curFilters() { return state.filtersByCat[state.category]; }
   function curWeights() { return state.weightsByCat[state.category]; }
 
+  function ageAgo(isoStr) {
+    if (!isoStr) return "";
+    const hrs = (Date.now() - new Date(isoStr)) / 3600000;
+    if (hrs < 1) return `${Math.round(hrs * 60)}m ago`;
+    if (hrs < 24) return `${Math.round(hrs)}h ago`;
+    return `${Math.round(hrs / 24)}d ago`;
+  }
+
   // ---- derived metrics ----
   function honestyScore(p) {
     const h = p.honesty || {}, w = state.honestyWeights;
@@ -294,10 +302,21 @@
       const rm = p.category === "watchlist"
         ? ` <button class="watchlist-rm text-red-400 hover:text-red-300 text-xs ml-1" data-asin="${esc(p.asin)}" title="Remove from watchlist">✕</button>`
         : "";
-      return `<td class="px-2 py-2 max-w-sm"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer" class="text-sky-300 hover:underline line-clamp-2">${esc(p.title || p.asin)}</a>${rm}<div class="text-xs text-slate-500">${esc(p.brand || "?")}${p.chemistry ? " · " + esc(p.chemistry) : ""}</div></td>`;
+      const age = ageAgo(p.last_seen);
+      const ageHtml = age ? `<span class="text-[9px] text-slate-600 ml-1" title="Last seen: ${esc(p.last_seen || '')}">${esc(age)}</span>` : "";
+      return `<td class="px-2 py-2 max-w-sm"><a href="${safeUrl(p.url)}" target="_blank" rel="noopener noreferrer" class="text-sky-300 hover:underline line-clamp-2">${esc(p.title || p.asin)}</a>${rm}<div class="text-xs text-slate-500">${esc(p.brand || "?")}${p.chemistry ? " · " + esc(p.chemistry) : ""}${ageHtml}</div></td>`;
     },
     price: priceCell,
-    mah: p => `<td class="px-2 py-2">${p.claimed_mah ? p.claimed_mah.toLocaleString() : "—"}</td>`,
+    mah: p => {
+      if (!p.claimed_mah) return `<td class="px-2 py-2">—</td>`;
+      const h = p.honesty || {};
+      let tip = "";
+      if (h.mah_cap) {
+        tip = `Max plausible from weight: ~${h.mah_cap.toLocaleString()}mAh`;
+        if (h.overstatement_pct) tip += ` — overstated by ~${h.overstatement_pct}%`;
+      }
+      return `<td class="px-2 py-2"${tip ? ` title="${esc(tip)}"` : ""}>${p.claimed_mah.toLocaleString()}</td>`;
+    },
     cost10k: p => {
       const c = costPer10k(p);
       if (c == null) return `<td class="px-2 py-2 whitespace-nowrap">—</td>`;

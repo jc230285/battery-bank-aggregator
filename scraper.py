@@ -416,6 +416,7 @@ def _http_get(url, timeout=20):
              "-H", "Accept-Language: en-GB,en;q=0.9",
              "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
              "-H", "Cache-Control: no-cache",
+             "-H", "Referer: https://www.amazon.co.uk/",
              "-w", _HTTP_MARKER + "%{http_code}",
              url],
             capture_output=True,
