@@ -95,6 +95,15 @@ def test_detect_features():
     assert not f["passthrough"]
 
 
+def test_detect_features_qi2_and_level_display():
+    # Qi2 should register as wireless
+    assert parse.detect_features("Qi2 15W MagSafe compatible charger")["wireless"]
+    # battery level indicator = display
+    assert parse.detect_features("10000mAh with battery level display")["display"]
+    # charge indicator display
+    assert parse.detect_features("charge indicator display and pass-through charging")["display"]
+
+
 def test_price_and_rating():
     assert parse.parse_price("£19.99") == 19.99
     assert parse.parse_price("Now £1,299.00") == 1299.00

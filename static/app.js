@@ -261,7 +261,7 @@
     const daysSince = (Date.now() - new Date(iso)) / 86400000;
     if (daysSince > 60) return "";
     const label = Math.round(daysSince) <= 1 ? "New today" : `New ${Math.round(daysSince)}d`;
-    return `<span class="badge bg-sky-800 text-sky-200" title="Listed ${esc(iso)}">🆕 ${label}</span> `;
+    return `<span class="badge bg-sky-800 text-sky-200" title="Listed ${esc(iso)}">${label}</span> `;
   }
   function dealBadge(p) {
     if (p.price == null || p.fair_price == null || p.price_delta == null) return "";

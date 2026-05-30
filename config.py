@@ -116,6 +116,7 @@ TRUSTED_BRANDS = [
     "AUKEY", "Mophie", "Xiaomi", "Samsung", "Spigen", "OtterBox", "Goal Zero",
     "EcoFlow", "Nitecore", "Charmast", "VEGER", "Romoss", "Cuktech",
     "Sharge", "Shargeek", "BioLite", "Jackery", "Poweradd", "Omnicharge",
+    "BLUETTI", "Renogy", "Growatt", "Allpowers", "Pecron",
 ]
 
 # Review phrases that suggest overstated / fake capacity.

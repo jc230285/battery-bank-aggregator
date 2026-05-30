@@ -2,9 +2,11 @@
 import re
 
 WIRELESS_KEYS = ["wireless charg", "qi charg", "qi-certified", "qi certified",
-                 "magsafe", "induction charg", "wireless power"]
+                 "qi2", "magsafe", "induction charg", "wireless power"]
 DISPLAY_KEYS = ["lcd", "digital display", "display screen", "led display",
-                "smart display", "percentage display", "screen display"]
+                "smart display", "percentage display", "screen display",
+                "battery level display", "battery level indicator",
+                "charge indicator display"]
 PASSTHROUGH_KEYS = ["pass-through", "pass through", "passthrough"]
 SOLAR_KEYS = ["solar"]
 
@@ -238,7 +240,8 @@ def detect_features(text):
 
 # ---- power-station parsers ----
 POWER_STATION_KEYS = ["power station", "portable power station", "solar generator",
-                      "portable generator", "lifepo4 generator", "leisure battery"]
+                      "portable generator", "lifepo4 generator", "leisure battery",
+                      "energy storage station", "energy station", "battery generator"]
 
 
 def is_power_station(title):

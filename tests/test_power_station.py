@@ -13,6 +13,12 @@ def test_is_power_station():
     assert not parse.is_power_station("Anker Power Bank 20000mAh")
     assert not parse.is_power_station("Carry Case for Bluetti Power Station")  # accessory
     assert not parse.is_power_station("")
+    # "energy storage station" — Jackery's naming
+    assert parse.is_power_station("Jackery Explorer 240 Energy Storage Station")
+    # "energy station" shorthand
+    assert parse.is_power_station("BLUETTI EB3A Energy Station 268Wh")
+    # "battery generator" — common synonym
+    assert parse.is_power_station("Pecron E600LFP Battery Generator 614Wh")
 
 
 def test_extract_chemistry():
