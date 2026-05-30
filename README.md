@@ -34,25 +34,31 @@ catalog instantly and refreshes on the 6-hour schedule. Everything is stored in
 ## How it works
 
 ```
-APScheduler (every 6h) ─▶ scrape (Playwright) ─▶ SQLite ─▶ analysis ─▶ Flask UI
+APScheduler (hourly + daily) ─▶ scrape (Playwright) ─▶ SQLite ─▶ analysis ─▶ Flask UI
 ```
 
-1. **Scrape** — paginates the Amazon search (`SEARCH_URL`), keeping only real power banks
-   (accessories like cases/cables are filtered out), then visits product pages for specs.
-   Scrapes until a CAPTCHA stops it, keeping whatever was collected (a *partial* run).
+1. **Scrape** — two cadences:
+   - **Hourly** — refreshes the **N oldest products by `last_seen`** (default 40) plus every
+     watchlist item by visiting `/dp/<asin>` directly. No search pagination. Cheap; one
+     CAPTCHA mid-cycle costs at most a single batch.
+   - **Daily** — runs a full *discovery* sweep across the configured Amazon UK searches to
+     find new ASINs, paginating until exhausted or blocked.
+   Either path stops cleanly on CAPTCHA and keeps whatever was collected (a *partial* run).
 2. **Store** — upserts into `products`, appends a `price_history` row each run, and records
    each run in `scrape_runs`.
 3. **Analyse** — recomputes cost-per-mAh, the honesty score, and the feature-value model.
 4. **Serve** — the UI reads the catalog; filtering, sorting and weighting happen live in the
    browser.
 
-### Incremental vs. full refresh
+### Hourly refresh vs. daily discovery vs. full refresh
 
-Specs (mAh, weight, ports) don't change for a given product, so a **normal run only
-detail-scrapes *new* products** and price-refreshes known ones from the cheap search-result
-cards — this keeps routine runs fast and avoids hammering Amazon. The **"Full refresh"**
-button (or `POST /api/run?full=1`) re-scrapes every product's detail page (use it after
-changing the parsers). "Run scrape now" does a normal incremental run.
+The hourly job picks the **N oldest products by `last_seen`** (config: `HOURLY_BATCH_SIZE`)
+and visits each detail page — keeps prices fresh on a rolling window without paying for a
+full pagination every hour. Daily discovery is the heavy search-pagination flow that finds
+new ASINs. The **"Full refresh"** button (or `POST /api/run?full=1`) is the manual lever
+that re-scrapes every product's detail page — use it after changing the parsers. The
+**Watchlist** page lets you paste any amazon.co.uk URL — those items are always refreshed
+on the hourly job, regardless of how recently they were last seen.
 
 ## The scores
 
@@ -92,8 +98,14 @@ changing the parsers). "Run scrape now" does a normal incremental run.
 | `BBA_SEARCH_URL` | battery-bank search | Amazon UK search to scrape |
 | `BBA_TOP_N` | `0` | Max products (`0` = unlimited, until CAPTCHA/end) |
 | `BBA_MAX_PAGES` | `30` | Pagination safety cap |
-| `BBA_INTERVAL_HOURS` | `6` | Scrape interval |
+| `BBA_INTERVAL_HOURS` | `1` | Hourly-refresh interval (the oldest-N detail scrape) |
+| `BBA_HOURLY_BATCH_SIZE` | `40` | How many oldest products refresh per hourly cycle |
+| `BBA_DISCOVERY_INTERVAL_HOURS` | `24` | Daily discovery (full search pagination) interval |
 | `BBA_REMOVE_AFTER_HOURS` | `30` | Drop a product only after it's been absent this long |
+| `BBA_CACHE_DIR` | `./cache` | Where the HTML cache lives (mount a volume in containers) |
+| `BBA_CACHE_TTL_HOURS` | `336` | Detail-page HTML cache TTL (14 days) |
+| `BBA_STATE_DIR` | `./state` | Persistent browser storage_state (cookies for stealth) |
+| `BBA_LOG_DIR` | `./logs` | Log directory |
 | `BBA_HEADLESS` | `1` | `0` to watch the browser |
 | `BBA_MIN_DELAY_S` / `BBA_MAX_DELAY_S` | `2` / `6` | Random delay between page loads |
 | `BBA_DB` | `battery_banks.sqlite3` | SQLite path |
@@ -104,8 +116,12 @@ Trusted brands, fake-review phrases, and default honesty weights live in `config
 
 - `GET /` — the web UI
 - `GET /api/products` — full catalog as JSON
-- `GET /api/status` — counts, last run, next run, live progress
-- `POST /api/run` — start an incremental scrape (`?full=1` to re-scrape all detail pages)
+- `GET /api/status` — counts, last run, per-job next runs (`hourly`/`discovery`), live progress
+- `POST /api/run` — manually trigger the **discovery** sweep (`?full=1` re-scrapes every
+  detail page). The hourly refresh runs automatically every `BBA_INTERVAL_HOURS`.
+- `POST /api/watchlist` `{"url": "https://www.amazon.co.uk/dp/..."}` — add a custom product
+  to the watchlist; returns the parsed ASIN and queues a background scrape
+- `DELETE /api/watchlist/<asin>` — remove a watchlist item
 
 ## Layout
 
