@@ -78,6 +78,7 @@ def test_extract_solar_input_and_cycles():
     assert parse.extract_cycle_life("up to 2000 full recharges") == 2000
     assert parse.extract_cycle_life("cycle life: 1500") == 1500
     assert parse.extract_cycle_life("rechargeable 500 times") == 500
+    assert parse.extract_cycle_life("3000+ charge-discharge cycles") == 3000
 
 
 def test_detect_features_expandable_ups():

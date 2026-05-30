@@ -398,7 +398,7 @@ def extract_cycle_life(text):
         return None
     t = text.lower().replace(",", "")
     patterns = [
-        r"(\d{3,5})\s*\+?\s*(?:charge\s*)?cycles?",
+        r"(\d{3,5})\s*\+?\s*(?:charge[\s\-](?:discharge[\s\-])?)?cycles?",
         r"(\d{3,5})\s*\+?\s*(?:full\s*)?recharges?",
         r"(?:life\s*cycles?|cycle\s*life)[^\d]{0,20}(\d{3,5})",
         r"(?:recharg\w*|charg\w*)\s+(\d{3,5})\s*\+?\s*times?",
