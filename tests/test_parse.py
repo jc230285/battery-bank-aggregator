@@ -136,6 +136,20 @@ def test_clean_brand():
     assert parse.clean_brand(None) is None
 
 
+def test_brand_from_title():
+    known = ["Anker", "Anker SOLIX", "EF ECOFLOW", "VTOMAN", "EcoFlow"]
+    # Known brand wins (longest-match-first so 'EF ECOFLOW' beats 'EcoFlow').
+    assert parse.brand_from_title("EF ECOFLOW DELTA Pro 3 LFP Battery", known) == "EF ECOFLOW"
+    assert parse.brand_from_title("VTOMAN J1500 Power Station", known) == "VTOMAN"
+    # Unknown all-caps token is accepted when not a seller-code pattern.
+    assert parse.brand_from_title("AFERIY P280 Portable Power Station", []) == "AFERIY"
+    # A seller-code-shaped first token is rejected, not promoted to brand.
+    assert parse.brand_from_title("HVSYVVSRL Random Product Title", []) is None
+    # Empty / no caps -> None.
+    assert parse.brand_from_title("", []) is None
+    assert parse.brand_from_title("portable charger", []) is None
+
+
 def test_clean_brand_rejects_seller_codes():
     # Amazon falls back to a random-looking seller code for products with no
     # registered brand. These should be rejected so the brand-reputation model

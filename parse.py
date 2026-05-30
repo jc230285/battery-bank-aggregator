@@ -417,6 +417,33 @@ def _looks_like_seller_code(s):
     return vowels <= 1
 
 
+def brand_from_title(title, known_brands=()):
+    """Recover the brand from the title when the byline gave only a seller code.
+
+    Prefers an exact match against the supplied `known_brands` list (so a title
+    starting with 'EF ECOFLOW DELTA Pro 3' returns 'EF ECOFLOW', and 'VTOMAN
+    J1500 Power Station' returns 'VTOMAN'). Falls back to the first all-caps
+    token (length >= 3) when no known brand matches, provided it doesn't itself
+    look like a seller code."""
+    if not title:
+        return None
+    t = title.strip()
+    if not t:
+        return None
+    lower = t.lower()
+    # Longest known-brand match wins — 'EF ECOFLOW' beats 'ECOFLOW'.
+    candidates = sorted({b for b in known_brands if b}, key=len, reverse=True)
+    for b in candidates:
+        if lower.startswith(b.lower() + " ") or lower == b.lower():
+            return b
+    m = re.match(r"\s*([A-Z][A-Z0-9-]{2,})\b", t)
+    if m:
+        cand = m.group(1)
+        if not _looks_like_seller_code(cand):
+            return cand
+    return None
+
+
 def clean_brand(text):
     """Normalise an Amazon byline into a bare brand name.
 

@@ -224,6 +224,12 @@ def _scrape_detail(page, asin):
             log.warning("cache put failed for %s: %s", asin, e)
 
     brand = parse.clean_brand(_text(page, "#bylineInfo"))
+    # Many low-reputation listings show a seller-code byline (rejected above);
+    # the title almost always still leads with the actual brand name.
+    if not brand:
+        title_for_brand = _text(page, "#productTitle")
+        known = config.TRUSTED_BRANDS + config.BRAND_BANKS + config.BRAND_STATIONS
+        brand = parse.brand_from_title(title_for_brand, known)
 
     bullets = _text(page, "#feature-bullets")
     details = " ".join([
