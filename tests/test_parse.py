@@ -359,6 +359,31 @@ def test_clean_brand_corporate_suffixes():
     assert parse.clean_brand("EcoFlow (Authorized)") == "EcoFlow"
 
 
+def test_clean_brand_trademark_symbols():
+    # Trademark and registered marks must be stripped.
+    assert parse.clean_brand("Anker®") == "Anker"
+    assert parse.clean_brand("Baseus™ Store") == "Baseus"
+    assert parse.clean_brand("UGREEN© Official") == "UGREEN"
+
+
+def test_extract_ports_word_numbers():
+    # Word-form numbers must be normalised to digits.
+    assert parse.extract_ports("single USB-C port")[1] == 1
+    assert parse.extract_ports("five USB-A outputs")[0] == 5
+    assert parse.extract_ports("six USB ports")[0] == 6
+
+
+def test_extract_ports_n_port_usb():
+    # "4-port USB charger" → 4 USB-A; USB-C word boundary must not catch "charger".
+    a, c = parse.extract_ports("4-port USB charger")
+    assert a == 4 and c is None
+    a, c = parse.extract_ports("6 port USB hub")
+    assert a == 6 and c is None
+    # USB-C should still work alongside the n-port form.
+    a, c = parse.extract_ports("4-port USB charger with 1 USB-C")
+    assert a == 4 and c == 1
+
+
 def test_asin_from_url():
     assert parse.asin_from_url("https://www.amazon.co.uk/dp/B0ABCD1234?th=1") == "B0ABCD1234"
     assert parse.asin_from_url("/gp/product/B07XYZ8901/") == "B07XYZ8901"

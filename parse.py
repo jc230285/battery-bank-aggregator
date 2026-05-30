@@ -233,14 +233,19 @@ def extract_ports(text):
     if not text:
         return (None, None)
     t = text.lower()
+    t = re.sub(r"\bsingle\b", "1", t)
     t = re.sub(r"\bdual\b", "2", t)
     t = re.sub(r"\btriple\b", "3", t)
     t = re.sub(r"\bquad(?:ruple)?\b", "4", t)
+    t = re.sub(r"\bfive\b", "5", t)
+    t = re.sub(r"\bsix\b", "6", t)
+    # "4-port USB" / "4 port USB" → counted as 4 USB
+    t = re.sub(r"(\d+)[\s\-]ports?\s+", r"\1 ", t)
     usb_c = 0
     usb_a = 0
 
-    _C_PAT = r"(?:usb[\s\-]?c|type[\s\-]?c)"
-    _A_PAT = r"(?:usb[\s\-]?a|type[\s\-]?a)"
+    _C_PAT = r"(?:usb[\s\-]?c\b|type[\s\-]?c\b)"
+    _A_PAT = r"(?:usb[\s\-]?a\b|type[\s\-]?a\b)"
     _QTY   = r"\([x×](\d+)\)"  # trailing (x2) / (×2) quantity marker
 
     for m in re.finditer(r"(\d+)\s*[x×]?\s*" + _C_PAT, t):
@@ -259,12 +264,12 @@ def extract_ports(text):
         usb_a = max(usb_a, int(m.group(1)))
     # bare "USB" = USB-A, excluding USB-C and micro/mini-USB (usually input)
     tb = re.sub(r"(?:micro|mini)[\s\-]?usb", " ", t)
-    for m in re.finditer(r"(\d+)\s*[x×]?\s*usb(?![\s\-]?c)\b", tb):
+    for m in re.finditer(r"(\d+)\s*[x×]?\s*usb(?![\s\-]?c\b)\b", tb):
         usb_a = max(usb_a, int(m.group(1)))
 
-    if usb_c == 0 and re.search(r"usb[\s\-]?c|type[\s\-]?c", t):
+    if usb_c == 0 and re.search(r"usb[\s\-]?c\b|type[\s\-]?c\b", t):
         usb_c = 1
-    if usb_a == 0 and re.search(r"usb(?![\s\-]?c)\b", tb):
+    if usb_a == 0 and re.search(r"usb(?![\s\-]?c\b)\b", tb):
         usb_a = 1
     return (usb_a or None, usb_c or None)
 
@@ -329,7 +334,8 @@ def extract_chemistry(text):
                             "li polymer", "lipo", "polymer battery", "polymer cell")):
         return "li-po"
     if any(k in t for k in ("lithium-ion", "lithium ion", "li-ion", "liion",
-                            "lithium battery", "lithium batteries")):
+                            "lithium battery", "lithium batteries",
+                            "lithium cell", "lithium cells")):
         return "li-ion"
     return None
 
@@ -374,7 +380,7 @@ def extract_wh(text):
     # Only fires if no explicit energy figure was found; voltage ≥ 12V guards against
     # USB/phone specs; ≥ 100Wh floor guards against small automotive accessories.
     if not vals:
-        for m in re.finditer(r"(\d+(?:\.\d+)?)\s*v\s*[x×*]?\s*(\d+(?:\.\d+)?)\s*ah\b", t):
+        for m in re.finditer(r"(\d+(?:\.\d+)?)\s*v\s*[x×*/]?\s*(\d+(?:\.\d+)?)\s*ah\b", t):
             volt, ah = float(m.group(1)), float(m.group(2))
             wh = volt * ah
             if volt >= 12 and 100 <= wh <= 20000:
@@ -576,13 +582,15 @@ def clean_brand(text):
     if not text:
         return None
     b = text.strip()
+    # Strip trademark/registered symbols that appear in some bylines.
+    b = b.replace("®", "").replace("™", "").replace("©", "")
     _STORE_QUALIFIERS = r"(?:official|uk\b|direct|online|exclusive|authoris[eo]d|shop)"
     m = re.search(r"visit the\s+(.+?)\s+store\b", b, re.I)
     if m:
         b = m.group(1)
     b = re.sub(r"^\s*(?:brand|name|manufacturer)[:\s]+", "", b, flags=re.I)
     b = re.sub(r"^\s*by\s+", "", b, flags=re.I)
-    b = re.sub(r"\s+store$", "", b, flags=re.I)
+    b = re.sub(r"\s+(?:store|brand)$", "", b, flags=re.I)
     # Strip all trailing Amazon store qualifiers (may be several: "UK Direct Official").
     b = re.sub(r"(?:\s+" + _STORE_QUALIFIERS + r")+\s*$", "", b, flags=re.I)
     # Strip corporate suffixes: "Jackery, Inc." -> "Jackery"
