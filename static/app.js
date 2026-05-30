@@ -338,7 +338,7 @@
     img: p => `<td class="px-2 py-2">${p.image_url ? `<img src="${safeUrl(p.image_url)}" class="w-10 h-10 object-contain">` : ""}</td>`,
     product: p => {
       const rm = p.category === "watchlist"
-        ? ` <button class="watchlist-rm text-red-400 hover:text-red-300 text-xs ml-1" data-asin="${esc(p.asin)}" title="Remove from watchlist">✕</button>`
+        ? ` <button class="watchlist-rm text-red-400 hover:text-red-300 text-xs ml-1" data-asin="${esc(p.asin)}" data-title="${esc(p.title || p.asin)}" title="Remove from watchlist">✕</button>`
         : "";
       const age = ageAgo(p.last_seen);
       const ageHtml = age ? `<span class="text-[9px] text-slate-600 ml-1" title="Last seen: ${esc(p.last_seen || '')}">${esc(age)}</span>` : "";
@@ -676,11 +676,21 @@
 
   function setRunning(on) { runBtn.disabled = on; runBtn.textContent = on ? "Scrape running…" : "Run scrape now"; }
   function liveTick() {
-    Promise.all([fetch("/api/status").then(r => r.json()), fetch("/api/products").then(r => r.json())])
-      .then(([s, prods]) => {
-        D.status = s; products = prods; renderStatus(); render();
-        if (s.running) { setRunning(true); setTimeout(liveTick, 3000); } else setRunning(false);
-      }).catch(() => setTimeout(liveTick, 5000));
+    // While a scrape runs, poll status every 3s for progress updates.
+    // Only reload the full products list when the run finishes — fetching
+    // 600+ products with history every 3s is needlessly heavy.
+    fetch("/api/status").then(r => r.json()).then(s => {
+      D.status = s; renderStatus();
+      if (s.running) {
+        setRunning(true);
+        setTimeout(liveTick, 3000);
+      } else {
+        setRunning(false);
+        fetch("/api/products").then(r => r.json()).then(prods => {
+          products = prods; render();
+        }).catch(() => {});
+      }
+    }).catch(() => setTimeout(liveTick, 5000));
   }
   function startRun(full) {
     setRunning(true);
@@ -735,7 +745,8 @@
     const btn = e.target.closest(".watchlist-rm");
     if (!btn) return;
     const asin = btn.dataset.asin;
-    if (!confirm(`Remove ${asin} from your watchlist?`)) return;
+    const label = btn.dataset.title || asin;
+    if (!confirm(`Remove "${label}" from your watchlist?`)) return;
     fetch("/api/watchlist/" + encodeURIComponent(asin), { method: "DELETE" })
       .then(r => r.json()).then(() => liveTick());
   });
