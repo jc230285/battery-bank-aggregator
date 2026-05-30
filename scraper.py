@@ -3,22 +3,20 @@
 Two refresh paths:
 - refresh_asins(asins): Playwright detail-page visits (heavyweight, needed when
   pages require JS).
-- refresh_asins_http(asins): urllib + BeautifulSoup (lightweight, no browser
-  fingerprint). Default for the hourly cycle — Amazon serves a full HTML
-  product page to a plain curl-style request without CAPTCHA, while the same
-  IP via headless Chromium gets challenged. This is why the hourly works
-  reliably and the discovery search-pagination still needs Playwright.
+- refresh_asins_http(asins): subprocess curl + BeautifulSoup (lightweight, no
+  browser fingerprint). Default for the hourly cycle. Amazon does TLS/HTTP
+  fingerprinting — Python's urllib hits CAPTCHA from the same IP where curl
+  gets a clean 200, so we shell out to the system curl whose JA3 hash matches
+  a real browser closely enough.
 """
 import datetime
-import gzip
 import logging
 import os
 import random
+import subprocess
 import time
-import zlib
 from collections import deque
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
-from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -403,28 +401,42 @@ def _save_storage_state(ctx):
         log.warning("storage_state save failed: %s", e)
 
 
+_HTTP_MARKER = "\n__HTTP_STATUS__"
+
+
 def _http_get(url, timeout=20):
-    """Plain HTTPS GET that mimics a real browser request enough for Amazon to
-    serve a full product page. Handles gzip/deflate so the response is text."""
-    req = Request(url, headers={
-        "User-Agent": config.USER_AGENT,
-        "Accept-Language": "en-GB,en;q=0.9",
-        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
-                   "image/avif,image/webp,*/*;q=0.8"),
-        "Accept-Encoding": "gzip, deflate",
-        "Cache-Control": "no-cache",
-    })
-    with urlopen(req, timeout=timeout) as r:
-        raw = r.read()
-        enc = (r.headers.get("Content-Encoding") or "").lower()
-    if enc == "gzip":
-        raw = gzip.decompress(raw)
-    elif enc == "deflate":
-        try:
-            raw = zlib.decompress(raw)
-        except zlib.error:
-            raw = zlib.decompress(raw, -zlib.MAX_WBITS)
-    return raw.decode("utf-8", errors="replace")
+    """GET via system curl. Amazon TLS-fingerprints (JA3) — Python's stdlib
+    SSL gets challenged from the same IP where curl is allowed through, so we
+    shell out. Raises HTTPError on 4xx/5xx, URLError on transport failure."""
+    try:
+        result = subprocess.run(
+            ["curl", "-sS", "--compressed",
+             "--max-time", str(timeout),
+             "-A", config.USER_AGENT,
+             "-H", "Accept-Language: en-GB,en;q=0.9",
+             "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+             "-H", "Cache-Control: no-cache",
+             "-w", _HTTP_MARKER + "%{http_code}",
+             url],
+            capture_output=True,
+            timeout=timeout + 5,
+        )
+    except subprocess.TimeoutExpired:
+        raise URLError("curl timed out")
+    except FileNotFoundError:
+        raise URLError("curl not installed in this environment")
+    if result.returncode != 0:
+        raise URLError(f"curl exit={result.returncode}: "
+                       + result.stderr.decode("utf-8", "replace")[:200])
+    body = result.stdout.decode("utf-8", errors="replace")
+    idx = body.rfind(_HTTP_MARKER)
+    if idx == -1:
+        return body
+    status = int((body[idx + len(_HTTP_MARKER):] or "0").strip() or "0")
+    body = body[:idx]
+    if status >= 400:
+        raise HTTPError(url, status, f"HTTP {status}", {}, None)
+    return body
 
 
 def _bs_text(soup, *selectors):
