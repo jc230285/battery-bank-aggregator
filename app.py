@@ -4,6 +4,8 @@ import os
 import threading
 import time
 import datetime
+import gc
+import ctypes
 
 from flask import Flask, jsonify, render_template, request, make_response
 from sqlalchemy import func
@@ -28,6 +30,15 @@ logging.basicConfig(
 log = logging.getLogger("app")
 
 app = Flask(__name__)
+
+
+def _trim_heap():
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
 _run_lock = threading.Lock()
 _progress = {"phase": "idle", "done": 0, "total": 0}
 
@@ -192,6 +203,7 @@ def run_cycle(trigger="manual", full=False):
         if session is not None:
             session.close()
         _run_lock.release()
+        _trim_heap()
 
 
 def _last_run(session):
@@ -511,6 +523,7 @@ def _watchlist_scrape_one(asin):
         if sess is not None:
             sess.close()
         _run_lock.release()
+        _trim_heap()
 
 
 @app.route("/api/watchlist", methods=["POST"])
