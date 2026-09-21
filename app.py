@@ -603,10 +603,8 @@ def main():
         coalesce=True, next_run_time=discovery_first,
     )
     scheduler.start()
-    log.info("serving on http://%s:%d (discovery first: %s, hourly first: %s)",
-             config.HOST, config.PORT, discovery_first.isoformat(), hourly_first.isoformat())
-    app.run(host=config.HOST, port=config.PORT, debug=False,
-            use_reloader=False, threaded=True)
+    log.info("scheduler ready (discovery first: %s, hourly first: %s)",
+             discovery_first.isoformat(), hourly_first.isoformat())
 
 
 # Gunicorn imports app:app; one worker means one scheduler owner.
