@@ -556,6 +556,7 @@ def api_watchlist_remove(asin):
 
 
 scheduler = BackgroundScheduler(daemon=True)
+_bootstrapped = False
 
 
 def _clear_orphan_runs():
@@ -575,6 +576,10 @@ def _clear_orphan_runs():
 
 
 def main():
+    global _bootstrapped
+    if _bootstrapped:
+        return
+    _bootstrapped = True
     init_db()
     _clear_orphan_runs()
     # Two cadences:
@@ -604,5 +609,8 @@ def main():
             use_reloader=False, threaded=True)
 
 
+# Gunicorn imports app:app; one worker means one scheduler owner.
+main()
+
 if __name__ == "__main__":
-    main()
+    pass
