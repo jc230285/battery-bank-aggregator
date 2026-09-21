@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime, ForeignKey,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy.pool import NullPool
 
 import config
 
@@ -15,6 +16,7 @@ Base = declarative_base()
 engine = create_engine(
     f"sqlite:///{config.DB_PATH}", future=True,
     connect_args={"check_same_thread": False},
+    poolclass=NullPool,
 )
 SessionLocal = sessionmaker(bind=engine, future=True, expire_on_commit=False)
 
