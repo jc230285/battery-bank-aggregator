@@ -18,4 +18,4 @@ ENV BBA_HOST=0.0.0.0 \
     BBA_HEADLESS=1
 
 EXPOSE 8473
-CMD ["python", "app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8473", "--workers", "1", "--threads", "4", "--timeout", "300", "--keep-alive", "5", "--max-requests", "250", "--max-requests-jitter", "25", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
