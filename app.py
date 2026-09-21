@@ -277,6 +277,9 @@ def _status(session):
         for j in scheduler.get_jobs():
             if j.next_run_time:
                 next_runs[j.id] = j.next_run_time.isoformat()
+    elif not SCHEDULER_ENABLED and last and last.finished_at:
+        next_runs["hourly"] = _iso_utc(last.finished_at + datetime.timedelta(hours=config.INTERVAL_HOURS))
+        next_runs["discovery"] = _iso_utc(last.finished_at + datetime.timedelta(hours=config.DISCOVERY_INTERVAL_HOURS))
     next_run = min(next_runs.values()) if next_runs else None
     cooldown = _captcha_cooldown_until(session)
     return {
@@ -569,6 +572,7 @@ def api_watchlist_remove(asin):
 
 
 scheduler = BackgroundScheduler(daemon=True)
+SCHEDULER_ENABLED = os.getenv("BBA_SCHEDULER_ENABLED", "1").lower() not in ("0", "false", "no", "off")
 _bootstrapped = False
 
 
@@ -595,6 +599,9 @@ def main():
     _bootstrapped = True
     init_db()
     _clear_orphan_runs()
+    if not SCHEDULER_ENABLED:
+        log.info("in-process scheduler disabled; background jobs run out-of-process")
+        return
     # Two cadences:
     #   - hourly refresh of the oldest N products + all watchlist items
     #     (direct detail pages, no search pagination)
